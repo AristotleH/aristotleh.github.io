@@ -413,7 +413,10 @@ export async function globe() {
       }
       userLat = Math.max(-55, Math.min(50, userLat));
     } else {
-      spin *= Math.pow(0.1, dt); userLat *= Math.pow(0.1, dt); pz.log *= Math.pow(0.1, dt);
+      // Away from the overview, drag and zoom offsets are dropped at once: they were relative to the overview's own
+      // centre, so fading them out would aim the camera somewhere else first. The camera still eases from wherever
+      // it is, so the flight goes straight from the current view to the stop.
+      spin = userLat = pz.log = 0;
       drag.vLon = drag.vLat = 0;
     }
     {

@@ -102,7 +102,7 @@ export function asciiGlobe() {
     if (overview) {
       if (!drag.on && !still && now - drag.lastMove > 2500) spin += dt * G.camera.idleSpinDegPerSec * Math.min(1, Math.exp(cur.logAlt) / (INTRO.dist - 1));
       userLat = Math.max(-55, Math.min(50, userLat));
-    } else { spin *= Math.pow(0.1, dt); userLat *= Math.pow(0.1, dt); pz.log *= Math.pow(0.1, dt); }
+    } else { spin = userLat = pz.log = 0; }   // as in 3D: fly straight from the current view to the stop
     const tgt = fromLL(stop.lat + userLat, stop.lon + spin);
     const ang = Math.acos(Math.max(-1, Math.min(1, dot(cur.dir, tgt))));
     const k = still || drag.on ? 1 : 1 - Math.exp(-dt * 2.4);
