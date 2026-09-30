@@ -96,8 +96,6 @@ h1,h2{font-family:var(--display);font-weight:700;margin:0;text-wrap:balance;lett
 h1{font-size:clamp(2rem,5.4vw,3.6rem);line-height:1.05}
 h2{font-size:1.45rem;line-height:1.2}
 .role{margin:-4px 0 0;font-weight:600}
-.kicker{margin:0 0 2px;align-self:flex-start;font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
-  color:var(--accent-ink);background:var(--accent);padding:5px 8px;border-radius:6px}
 .projects{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
 .projects>li{display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
 .projects>li:first-child{padding-top:0;border-top:0}
@@ -181,7 +179,7 @@ h2{font-size:1.45rem;line-height:1.2}
 /* Land is dense and heavy; ocean, atmosphere and stars stay faint so the continents stand off the page. */
 .a-o{color:var(--a-ocean);opacity:.7} .a-rim{color:var(--a-ocean);font-weight:500} .a-l{color:var(--a-land);font-weight:500} .a-h{color:var(--a-high);font-weight:500} .a-i{color:var(--a-ice);font-weight:500}
 .a-atm{color:var(--a-ocean);opacity:.45} .a-star{color:var(--muted);opacity:.45} .a-rt{color:var(--accent)}
-.a-mk{color:var(--accent);font-weight:500} .a-kick{color:var(--accent);font-weight:500} .a-lb{color:var(--ink)} .a-lbo{background:var(--ink);color:var(--bg);font-weight:500}
+.a-mk{color:var(--accent);font-weight:500} .a-lb{color:var(--ink)} .a-lbo{background:var(--ink);color:var(--bg);font-weight:500}
 [data-mode="ascii"] #globe,[data-mode="ascii"] #labels,[data-mode="ascii"] .card{display:none}
 [data-mode="ascii"] #ascii-globe{display:block}
 [data-mode="ascii"] .abox{display:block}
@@ -311,8 +309,7 @@ h2{font-size:1.45rem;line-height:1.2}
   "order": "newest-first",
   "layout": [
     { "section": "projects", "label": "Projects" },
-    { "section": "current", "label": "Now" },
-    { "section": "history", "label": "History" }
+    { "section": "experience", "label": "Experience and education" }
   ],
   "projects": [],
   "stops": [
@@ -568,14 +565,14 @@ const SITE_SCHEMA = {
     // Stop order on the page: as written in `stops`, or sorted by `start` (photos by `photo.taken`).
     // Stops without a date keep their place relative to each other, after the dated ones.
     order: { enum: ["as-listed", "oldest-first", "newest-first"] },
-    // The page after the intro, top to bottom. "current" is every stop that ends "present", "history" every
-    // other stop (both sorted by `order`), and "projects" one card listing `projects`. A label is shown on the
-    // section's first card, and the projects card uses it as its title. An empty section is left out.
+    // The page after the intro, top to bottom: "projects" is one card listing `projects` (left out while the
+    // list is empty), "experience" is every stop, sorted by `order`. The label titles the projects card, and
+    // heads each section in the HTML view.
     layout: {
-      type: "array", minItems: 2, maxItems: 3,
+      type: "array", minItems: 1, maxItems: 2,
       items: {
         type: "object", additionalProperties: false, required: ["section"],
-        properties: { section: { enum: ["current", "projects", "history"] }, label: TEXT },
+        properties: { section: { enum: ["projects", "experience"] }, label: TEXT },
       },
     },
     // Pages hosted on this site, each in its own folder under /projects/. `stop` ties one to a place: it's also
@@ -830,15 +827,17 @@ function checkSite(raw) {
     if (errors.length > before) { drop.push(s.id); return false; }
     return true;
   });
-  // Layout: current and history each exactly once (every stop needs a card); projects at most once.
-  const layout = site.layout || [{ section: "current" }, { section: "projects" }, { section: "history" }];
-  for (const sec of ["current", "projects", "history"]) {
+  // Layout: each section at most once, and experience always (every stop needs a card).
+  const layout = site.layout || [{ section: "projects" }, { section: "experience" }];
+  for (const sec of ["projects", "experience"]) {
     const n = layout.filter(b => b.section === sec).length;
     if (n > 1) errors.push(`site.layout: "${sec}" is listed ${n} times`);
-    if (n === 0 && sec !== "projects") errors.push(`site.layout: needs a "${sec}" section`);
   }
   site.layout = layout.filter((b, i) => layout.findIndex(o => o.section === b.section) === i);
-  for (const sec of ["current", "history"]) if (!site.layout.some(b => b.section === sec)) site.layout.push({ section: sec });
+  if (!site.layout.some(b => b.section === "experience")) {
+    errors.push(`site.layout: needs an "experience" section`);
+    site.layout.push({ section: "experience" });
+  }
   for (const s of site.stops) if (s.id === "intro" || s.id === "projects") errors.push(`site.stops (${s.id}): "${s.id}" is reserved`);
   site.stops = site.stops.filter(s => s.id !== "intro" && s.id !== "projects");
   site.projects = itemOk(site.projects || [], P.projects.items, "projects");
@@ -926,10 +925,8 @@ const INTRO = { id: "intro", lat: SITE.overview.lat, lon: SITE.overview.lon,
   dist: 1 + altitude(SITE.overview.view), name: "Overview" };
 
 // The page after the intro, in `layout` order. The projects card is one step; the globe pulls back to the
-// overview framing while it's on screen. Each section's label goes on its first card.
+// overview framing while it's on screen.
 const PROJECTS = ordered(SITE.projects, SITE.order);
-const isCurrent = s => s.end === "present";
-const SECTION_LABEL = new Map();
 let PROJECTS_STEP = null;
 const SEQ = [];
 for (const b of SITE.layout) {
@@ -939,10 +936,7 @@ for (const b of SITE.layout) {
     PROJECTS_STEP = { id: "projects", title: b.label || "Projects",
       lat: INTRO.lat, lon: INTRO.lon, dist: INTRO.dist };
     items = [PROJECTS_STEP];
-  } else {
-    items = STOPS.filter(s => isCurrent(s) === (b.section === "current"));
-    if (items.length && b.label) SECTION_LABEL.set(items[0].id, b.label);
-  }
+  } else items = STOPS;
   SEQ.push(...items);
 }
 const projectsAt = s => PROJECTS.filter(pr => pr.stop === s.id);
@@ -991,7 +985,6 @@ function eyebrowOf(s) {
   const dates = s.end ? `${fmtMonth(s.start)} – ${fmtMonth(s.end)}` : fmtMonth(s.start);
   return [dates, s.employment, s.workplace].filter(Boolean).join(" · ");
 }
-const kickerHtml = s => SECTION_LABEL.has(s.id) ? `<p class="kicker">${esc(SECTION_LABEL.get(s.id))}</p>` : "";
 const tagsHtml = tags => tags && tags.length ? `<ul class="tags">${tags.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : "";
 function projectsCard(step) {
   const list = PROJECTS.map(pr => `<li>
@@ -1003,7 +996,7 @@ function projectsCard(step) {
 }
 function cardOf(s) {
   if (s === PROJECTS_STEP) return projectsCard(s);
-  const head = `${kickerHtml(s)}<p class="eyebrow">${markHtml(shapeOf(s))}${esc(eyebrowOf(s))}</p><h2>${esc(s.title)}</h2>`;
+  const head = `<p class="eyebrow">${markHtml(shapeOf(s))}${esc(eyebrowOf(s))}</p><h2>${esc(s.title)}</h2>`;
   let inner;
   if (KINDS[s.kind].card === "photo") {
     const media = s.photo.src
@@ -2133,10 +2126,6 @@ function linkRows(items, inner) {
   if (row.length) rows.push(row);
   return rows;
 }
-function kickerLines(s, inner) {
-  if (!SECTION_LABEL.has(s.id)) return [];
-  return [[{ t: `[ ${toAscii(SECTION_LABEL.get(s.id)).toUpperCase()} ]`.slice(0, inner), cls: "a-kick" }], ""];
-}
 function projectsBox(step, inner) {
   const lines = [];
   const count = `${PROJECTS.length} ${PROJECTS.length === 1 ? "PROJECT" : "PROJECTS"}`;
@@ -2154,7 +2143,7 @@ function projectsBox(step, inner) {
   return boxHtml(lines, inner);
 }
 function stopBox(s, inner, art) {
-  const lines = [...kickerLines(s, inner)];
+  const lines = [];
   wrap(eyebrowOf(s).toUpperCase(), inner - 2).forEach((l, i) =>
     lines.push([{ t: i ? "  " : MARK[shapeOf(s)] + " ", cls: "a-mk" }, { t: l, cls: "a-dim" }]));
   lines.push("");
@@ -2526,10 +2515,7 @@ ${s.tags && s.tags.length ? `<p>${s.tags.map(esc).join(", ")}</p>` : ""}${proj}<
       const list = PROJECTS.map(pr => `<li><a href="${esc(pr.path)}">${esc(pr.title)}</a>${pr.date ? ` (${esc(fmtMonth(pr.date))})` : ""}: ${esc(pr.summary)}</li>`).join("\n");
       return `<h2>${esc(PROJECTS_STEP.title)}</h2>\n<ul>\n${list}\n</ul>`;
     }
-    const items = STOPS.filter(s => isCurrent(s) === (b.section === "current"));
-    if (!items.length) return "";
-    const title = b.label || (b.section === "current" ? "Now" : "Experience and education");
-    return `<h2>${esc(title)}</h2>\n${items.map(stopHtml).join("\n<hr>\n")}`;
+    return `<h2>${esc(b.label || "Experience and education")}</h2>\n${STOPS.map(stopHtml).join("\n<hr>\n")}`;
   }).filter(Boolean).join("\n<hr>\n");
   el.innerHTML = `<header>
 <h1>${esc(P.name)}</h1>
