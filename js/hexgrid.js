@@ -40,7 +40,11 @@ export function hexGrid(n) {
   // Triangle centres, the triangles around each point, and each point's mean distance to its neighbours (every
   // edge is in two triangles, so averaging over a point's triangles' edges counts each neighbour equally).
   const T = tris.length / 3, tc = new Float32Array(T * 3), around = Array.from({ length: count }, () => []);
-  const dist = (a, b) => Math.acos(Math.min(1, pts[a * 3] * pts[b * 3] + pts[a * 3 + 1] * pts[b * 3 + 1] + pts[a * 3 + 2] * pts[b * 3 + 2]));
+  // Straight-line distance: at a degree or so apart it matches the arc to 1 part in 10^4, without an acos.
+  const dist = (a, b) => {
+    const x = pts[a * 3] - pts[b * 3], y = pts[a * 3 + 1] - pts[b * 3 + 1], z = pts[a * 3 + 2] - pts[b * 3 + 2];
+    return Math.sqrt(x * x + y * y + z * z);
+  };
   for (let t = 0; t < T; t++) {
     let cx = 0, cy = 0, cz = 0;
     for (let k = 0; k < 3; k++) {

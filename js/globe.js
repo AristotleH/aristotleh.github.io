@@ -214,10 +214,13 @@ export async function globe() {
     const col = new Uint16Array(nv * 3), index = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
     const vStart = new Int32Array(ids.length + 1);
     let v = 0, i = 0, el = 0, flags = 0, dl = 0;
-    const put = (p, nx, ny, nz, top) => {
-      pos[v * 3] = p.x; pos[v * 3 + 1] = p.y; pos[v * 3 + 2] = p.z;
-      nor[v * 3] = Math.round(nx * 127); nor[v * 3 + 1] = Math.round(ny * 127); nor[v * 3 + 2] = Math.round(nz * 127);
-      info[v * 4] = el; info[v * 4 + 1] = flags; info[v * 4 + 2] = dl; info[v * 4 + 3] = top;
+    let nx = 0, ny = 0, nz = 0;   // the current face's normal, already scaled for the Int8 attribute
+    const face = n => { nx = Math.round(n.x * 127); ny = Math.round(n.y * 127); nz = Math.round(n.z * 127); };
+    const put = (p, top) => {
+      const o = v * 3, o4 = v * 4;
+      pos[o] = p.x; pos[o + 1] = p.y; pos[o + 2] = p.z;
+      nor[o] = nx; nor[o + 1] = ny; nor[o + 2] = nz;
+      info[o4] = el; info[o4 + 1] = flags; info[o4 + 2] = dl; info[o4 + 3] = top;
       v++;
     };
     ids.forEach((k, n) => {
@@ -228,14 +231,16 @@ export async function globe() {
       for (let j = 0; j < m; j++) ring[j].fromArray(S.corner, (c0 + j) * 3).sub(dir).multiplyScalar(f).add(dir).normalize();
       el = S.elev[k]; flags = S.land[k] + 2 * S.bay[k]; dl = S.delay[k];
       const t0 = v;
-      for (let j = 0; j < m; j++) put(ring[j], dir.x, dir.y, dir.z, 1);
+      face(dir);
+      for (let j = 0; j < m; j++) put(ring[j], 1);
       for (let j = 1; j < m - 1; j++) { index[i++] = t0; index[i++] = t0 + j; index[i++] = t0 + j + 1; }
       if (walls(k)) for (let j = 0; j < m; j++) {
         if (!wallAt(c0 + j)) continue;
         const a = ring[j], b = ring[(j + 1) % m];
         ev.subVectors(b, a); wn.addVectors(a, b); wn.crossVectors(ev, wn).normalize();   // outward: edge x up
         const w0 = v;
-        put(a, wn.x, wn.y, wn.z, 0); put(b, wn.x, wn.y, wn.z, 0); put(b, wn.x, wn.y, wn.z, 1); put(a, wn.x, wn.y, wn.z, 1);
+        face(wn);
+        put(a, 0); put(b, 0); put(b, 1); put(a, 1);
         index[i++] = w0; index[i++] = w0 + 1; index[i++] = w0 + 2; index[i++] = w0; index[i++] = w0 + 2; index[i++] = w0 + 3;
       }
     });
@@ -280,9 +285,10 @@ export async function globe() {
   const globeTiles = { dir: tileDir, cornerStart: null, corner: null, elev: tileElev, delay: tileDelay,
     land: Uint8Array.from(tileKind, k => k > 0 ? 1 : 0), bay: tileBay };
   globeTiles.cornerStart = cornerStart; globeTiles.corner = corner;
+  // A block's geometry is built the first time it comes over the horizon (and the rest in idle time), so the first
+  // frame only waits for the side of the globe that's showing.
   for (const idx of blockLists) {
     if (!idx.length) continue;
-    const M = tileGeometry(idx, globeTiles), mesh = new THREE.Mesh(M.geo, tileMat);
     const center = new THREE.Vector3();
     let minDot = 1, widest = 0, land = false, peak = 0;
     for (const g of idx) { center.x += tileDir[g * 3]; center.y += tileDir[g * 3 + 1]; center.z += tileDir[g * 3 + 2]; }
@@ -293,13 +299,19 @@ export async function globe() {
       if (tileKind[g] > 0) { land = true; peak = Math.max(peak, tileElev[g]); }
     }
     const radius = Math.acos(Math.max(-1, Math.min(1, minDot))) + widest;
-    // Bounds for three.js frustum culling: the block's cap of the sphere, plus room for the tallest tiles.
-    M.geo.boundingSphere = new THREE.Sphere(center.clone(), 2 * Math.sin(radius / 2) + 0.07);
-    mesh.frustumCulled = true;
-    scene.add(mesh);
     const bayAt = [];
     idx.forEach((g, n) => { if (tileBay[g]) bayAt.push(n); });
-    chunks.push({ mesh, M, idx: Int32Array.from(idx), center, radius, land, peak, bayAt });
+    chunks.push({ mesh: null, M: null, idx: Int32Array.from(idx), center, radius, land, peak, bayAt });
+  }
+  function realize(ch) {
+    ch.M = tileGeometry(ch.idx, globeTiles);
+    // Bounds for three.js frustum culling: the block's cap of the sphere, plus room for the tallest tiles.
+    ch.M.geo.boundingSphere = new THREE.Sphere(ch.center.clone(), 2 * Math.sin(ch.radius / 2) + 0.07);
+    ch.mesh = new THREE.Mesh(ch.M.geo, tileMat);
+    ch.mesh.frustumCulled = true;
+    scene.add(ch.mesh);
+    if (palette) paintChunk(ch);
+    needsRender = true;
   }
 
   // Level of detail. Every globe tile near a detail stop is split, again and again, until tiles are small near the
@@ -338,8 +350,17 @@ export async function globe() {
   const MIN_TILE = Math.min(...REGIONS.map(g => g.step * D * 1.1), Infinity);
   // Detail tiles are built on first need: in idle time after the first frame, or on arrival at a detail stop.
   let DT = null;
-  function buildDetail() {
+  // The build is a generator that pauses after each globe tile it replaces. Idle time runs it a few milliseconds at
+  // a time, so the spinning globe never stalls; arriving at a detail stop first runs whatever is left at once.
+  let detailJob = null;
+  function buildDetail(budgetMs = Infinity) {
     if (DT) return DT;
+    detailJob ??= detailSteps();
+    const until = performance.now() + budgetMs;
+    while (!detailJob.next().done) if (performance.now() >= until) return null;
+    return DT;
+  }
+  function* detailSteps() {
     const L = { dir: [], cornerStart: [0], corner: [], elev: [], land: [], bay: [], delay: [], kind: [], tone: [], parent: [], shrunk: [], cell: [] };
     function emit(c, pts, ang, parent, tone = hash(L.tone.length + 7919), shrunk = 0, cell = -1 - L.tone.length) {
       const lat = Math.asin(Math.max(-1, Math.min(1, c.y))) / D, lon = Math.atan2(-c.z, c.x) / D;
@@ -448,6 +469,7 @@ export async function globe() {
         const fi = Math.floor(idx / (N * N)), rem = idx % (N * N), i = Math.floor(rem / N), j = rem % N;
         splitSquare(fi, i / N * 2 - 1, j / N * 2 - 1, 2 / N, idx);
       }
+      yield;
     }
     const count = L.tone.length;
     // A hexagon cut between two parents is one tile to the eye: the edge along the cut gets no walls.
@@ -486,7 +508,7 @@ export async function globe() {
   function setDetailFocus(dir) {
     const f = new THREE.Vector3(), cap = 0.06;
     for (let i = 0; i < COUNT; i++) if (tileBay[i]) tileDelay[i] = Math.min(1, f.fromArray(tileDir, i * 3).angleTo(dir) / cap);
-    for (const ch of chunks) if (ch.bayAt.length) {
+    for (const ch of chunks) if (ch.M && ch.bayAt.length) {
       for (const n of ch.bayAt) delayTile(ch.M, n, tileDelay[ch.idx[n]]);
       ch.M.infoAttr.needsUpdate = true;
     }
@@ -626,27 +648,29 @@ export async function globe() {
     }
     DT.M.colAttr.needsUpdate = true;
   }
+  function paintChunk(ch) {
+    const { ocean, ocean2, land2, snow, landColor } = palette, c = new THREE.Color();
+    for (let k = 0; k < ch.idx.length; k++) {
+      const i = ch.idx[k], kind = tileKind[i], t = tileTone[i];
+      if (kind === 0) c.copy(ocean).lerp(ocean2, t);
+      else if (kind === 1) landColor(c, tileElev[i], t);
+      else c.copy(snow).lerp(land2, t * 0.08);
+      paintTile(ch.M, k, c);
+    }
+    ch.M.colAttr.needsUpdate = true;
+  }
   function applyTheme() {
     const ocean = lin("--g-ocean"), ocean2 = lin("--g-ocean2");
     const land = lin("--g-land"), land2 = lin("--g-land2");
-    const snow = lin("--g-snow"), c = new THREE.Color();
+    const snow = lin("--g-snow");
     // Low land takes --g-land, higher land --g-land2, and only the highest ground (above 5 km) pales toward --g-snow.
     const landColor = (out, km, t) => {
       out.copy(land).lerp(land2, Math.max(0, Math.min(1, km / 2 + (t - 0.5) * 0.2)));
       if (km > 5) out.lerp(snow, Math.min(0.6, (km - 5) / 1.5));
       return out;
     };
-    for (const ch of chunks) {
-      for (let k = 0; k < ch.idx.length; k++) {
-        const i = ch.idx[k], kind = tileKind[i], t = tileTone[i];
-        if (kind === 0) c.copy(ocean).lerp(ocean2, t);
-        else if (kind === 1) landColor(c, tileElev[i], t);
-        else c.copy(snow).lerp(land2, t * 0.08);
-        paintTile(ch.M, k, c);
-      }
-      ch.M.colAttr.needsUpdate = true;
-    }
-    palette = { ocean, ocean2, landColor };
+    palette = { ocean, ocean2, land2, snow, landColor };
+    for (const ch of chunks) if (ch.M) paintChunk(ch);
     paintDetail();
     renderer.setClearColor(new THREE.Color(css("--bg")), 1);   // the canvas is opaque; match the page
     core.material.color.copy(lin("--g-core"));
@@ -806,7 +830,10 @@ export async function globe() {
     const horizon = Math.acos(Math.min(1, 1 / camera.position.length())) + 0.02;
     for (const ch of chunks) {
       const off = camN.angleTo(ch.center);
-      ch.mesh.visible = off - ch.radius < horizon + Math.acos(1 / (1 + heightOf(ch.land, ch.peak, lastM)));
+      const shown = off - ch.radius < horizon + Math.acos(1 / (1 + heightOf(ch.land, ch.peak, lastM)));
+      if (shown && !ch.mesh) realize(ch);
+      if (!ch.mesh) continue;
+      ch.mesh.visible = shown;
       ch.mesh.renderOrder = Math.round(off * 100);
     }
     // Nothing moved and nothing is animating: skip the pin, label and grouping work, and the draw.
@@ -903,8 +930,17 @@ export async function globe() {
       lastSig = sig;
       needsRender = false;
       if (!started && detailStops.length) {
-        const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
-        setTimeout(() => idle(() => buildDetail(), { timeout: 3000 }), 800);
+        const idle = window.requestIdleCallback || (fn => setTimeout(() => fn({ timeRemaining: () => 6 }), 50));
+        const slice = d => { if (!buildDetail(Math.max(2, d.timeRemaining() - 1))) idle(slice); };
+        setTimeout(() => idle(slice), 800);
+      }
+      if (!started) {
+        // Blocks on the far side are built in idle moments too, so turning the globe never waits on one.
+        const idle = window.requestIdleCallback || (fn => setTimeout(() => fn({ timeRemaining: () => 6 }), 50));
+        const blocks = d => {
+          for (const ch of chunks) if (!ch.mesh) { realize(ch); ch.mesh.visible = false; if (d.timeRemaining() < 2) return idle(blocks); }
+        };
+        setTimeout(() => idle(blocks), 300);
       }
       started = true;
     }

@@ -11,6 +11,23 @@
 <link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png">
 <link rel="manifest" href="/assets/images/site.webmanifest">
 <link rel="stylesheet" href="css/site.css">
+<!-- Fetched as soon as the page starts, instead of each waiting on the file that asks for it. -->
+<link rel="preload" href="data/site.json" as="fetch" crossorigin>
+<link rel="preload" href="data/layers/globe-land.txt" as="fetch" crossorigin>
+<link rel="preload" href="data/layers/globe-elevation.txt" as="fetch" crossorigin>
+<link rel="modulepreload" href="js/main.js">
+<link rel="modulepreload" href="js/site.js">
+<link rel="modulepreload" href="js/schema.js">
+<link rel="modulepreload" href="js/page.js">
+<link rel="modulepreload" href="js/globe.js">
+<link rel="modulepreload" href="js/hexgrid.js">
+<link rel="modulepreload" href="js/gestures.js">
+<link rel="modulepreload" href="js/mode.js">
+<link rel="modulepreload" href="js/ascii-text.js">
+<link rel="modulepreload" href="js/ascii-fonts.js">
+<link rel="modulepreload" href="js/ascii-globe.js">
+<link rel="modulepreload" href="js/plain.js">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 </head>
 <body>
 
@@ -39,7 +56,6 @@
   <button id="next" type="button" aria-label="Next stop">↓</button>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

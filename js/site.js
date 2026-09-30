@@ -25,7 +25,9 @@ export async function fetchLayer(src) {
   try {
     const r = await fetch("data/" + src);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    layerFiles.set(src, Uint8Array.from(atob((await r.text()).trim()), c => c.charCodeAt(0)));
+    const bin = atob((await r.text()).trim()), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    layerFiles.set(src, bytes);
   } catch (e) { layerFiles.set(src, e); }
 }
 // Elevation layers are zlib-compressed bytes. The browser inflates them; a bad layer reads as sea level.
