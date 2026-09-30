@@ -33,11 +33,17 @@ export let sections = [];
 
 // ---------- Scroll tracking ----------
 export let active = 0;
+// Where the globes point. The arrows, a tapped pin and the stop bar's back-to-top scroll the page smoothly past the
+// stops in between; the camera flies straight to the destination instead of visiting each one. Scrolling of your
+// own hands the camera back to the page position.
+export let heading = null;
+export const viewStop = () => ALL[heading ?? active];
 export function goTo(i) {
   i = Math.max(0, Math.min(ALL.length - 1, i));
+  heading = i;
   sections[i].scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth", block: "center" });
 }
-export const toTop = () => scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" });
+export const toTop = () => { heading = 0; scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" }); };
 
 // Section centres are measured once (and again when layout changes), so scrolling reads no layout.
 export let centers = [];
@@ -70,6 +76,7 @@ export function updateActive() {
     updateActive.done = true;
     if (window.onStopChange) window.onStopChange(active);
   }
+  if (heading === active) heading = null;
 }
 // The name of the school or company on screen, or yours on the intro.
 export function renderHud(i = active) {
@@ -126,6 +133,7 @@ export function initPage() {
   hudTop.addEventListener("click", toTop);
   hudTop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toTop(); } });
 
+  for (const ev of ["wheel", "touchstart", "keydown"]) addEventListener(ev, () => { heading = null; }, { passive: true });
   addEventListener("resize", sizeHud);
   document.fonts?.ready.then(sizeHud);
   let scrollQueued = false;

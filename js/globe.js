@@ -2,7 +2,7 @@
 // between stops. It starts the first time the 3D view is shown and sleeps while another view is up.
 import { ALL, EARTH_KM, INTRO, KINDS, SITE, STOPS, reduceMotion, shapeOf } from "./site.js";
 import { MODE } from "./mode.js";
-import { active, goTo, syncScrollZone } from "./page.js";
+import { active, goTo, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
 import { makeTerrain } from "./terrain.js";
 import { startTiles, terrainInput } from "./tiles-client.js";
@@ -368,7 +368,10 @@ export async function globe() {
     if (!drag.on || e.pointerId !== drag.id || pz.pinching) return;
     const now = performance.now(), dtm = Math.max(1, now - drag.t) / 1000;
     // Degrees per pixel from the globe's radius on screen, so the surface moves a little slower than the pointer.
-    const radiusPx = (Hh / 2) / (Math.tan(camera.fov * D / 2) * Math.sqrt(Math.max(0.2, cur.dist * cur.dist - 1)));
+    // Close in, the ground under the view is about `alt` away, much nearer than the horizon; the smaller of the two
+    // (scaled to agree at the overview's altitude) keeps the ground under the finger at every zoom.
+    const reach = Math.min(Math.sqrt(Math.max(0.2, cur.dist * cur.dist - 1)), (cur.dist - 1) * 1.32);
+    const radiusPx = (Hh / 2) / (Math.tan(camera.fov * D / 2) * reach);
     const dpp = G.camera.dragSpeed * (180 / Math.PI) / radiusPx;
     const dLon = -(e.clientX - drag.x) * dpp, dLat = (e.clientY - drag.y) * dpp;
     spin += dLon; userLat += dLat;
@@ -396,7 +399,7 @@ export async function globe() {
   function frame(now) {
     if (MODE !== "3d") { sleeping3D = true; return; }
     const dt = last === null ? 0 : Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-    const stop = ALL[active];
+    const stop = viewStop();
     const still = reduceMotion.matches;
     const overview = stop === INTRO;
     if (overview !== wasOverview) { document.documentElement.classList.toggle("can-drag", overview); wasOverview = overview; syncScrollZone(); }

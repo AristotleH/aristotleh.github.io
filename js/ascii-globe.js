@@ -1,7 +1,7 @@
 // The ASCII globe: every character cell casts a ray at the sphere; what it hits picks the glyph and color.
 import { ALL, EARTH_KM, INTRO, KINDS, REGIONS, SITE, STOPS, TERRAIN, reduceMotion, shapeOf } from "./site.js";
 import { MODE } from "./mode.js";
-import { active, syncScrollZone } from "./page.js";
+import { active, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
 import { MARK, escHtml, renderBoxes, toAscii } from "./ascii-text.js";
 
@@ -80,7 +80,8 @@ export function asciiGlobe() {
   });
   pre.addEventListener("pointermove", e => {
     if (!drag.on || pz.pinching) return;
-    const k = 0.35 * G.camera.dragSpeed;
+    // Degrees per character shrink with altitude, so the ground keeps pace with the pointer when zoomed in.
+    const k = 0.35 * G.camera.dragSpeed * Math.min(1, Math.exp(cur.logAlt) / (INTRO.dist - 1));
     spin -= (e.clientX - drag.x) / cw * k * 2; userLat += (e.clientY - drag.y) / ch * k * 2;
     drag.x = e.clientX; drag.y = e.clientY; drag.lastMove = performance.now();
   });
@@ -96,7 +97,7 @@ export function asciiGlobe() {
   function frame(now) {
     if (MODE !== "ascii") { sleeping = true; return; }
     const dt = last === null ? 0 : Math.min(0.05, (now - last) / 1000); last = now;
-    const stop = ALL[active], overview = stop === INTRO, still = reduceMotion.matches;
+    const stop = viewStop(), overview = stop === INTRO, still = reduceMotion.matches;
     if (overview !== wasIntro) { pre.classList.toggle("can-drag", overview); wasIntro = overview; syncScrollZone(); }
     if (overview) {
       if (!drag.on && !still && now - drag.lastMove > 2500) spin += dt * G.camera.idleSpinDegPerSec * Math.min(1, Math.exp(cur.logAlt) / (INTRO.dist - 1));
