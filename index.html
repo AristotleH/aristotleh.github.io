@@ -461,7 +461,9 @@ h2{font-size:1.45rem;line-height:1.2}
   ],
   "globe": {
     "grid": {
+      "shape": "hex",
       "tilesPerFaceEdge": 96,
+      "hexSubdivisions": 64,
       "tileGap": 0.1
     },
     "terrain": {
@@ -667,9 +669,13 @@ const SITE_SCHEMA = {
       type: "object", additionalProperties: false, required: ["grid", "terrain", "detail", "camera", "layers"],
       properties: {
         grid: {
-          type: "object", additionalProperties: false, required: ["tilesPerFaceEdge", "tileGap"],
+          type: "object", additionalProperties: false, required: ["shape", "tilesPerFaceEdge", "hexSubdivisions", "tileGap"],
           properties: {
-            tilesPerFaceEdge: { type: "integer", minimum: 16, maximum: 192 },   // tiles along each cube face edge
+            // "hex": hexagonal tiles on a subdivided icosahedron (12 of them sit where only 5 neighbours meet).
+            // "square": square tiles on a cube pushed out onto the sphere.
+            shape: { enum: ["hex", "square"] },
+            tilesPerFaceEdge: { type: "integer", minimum: 16, maximum: 192 },   // square: tiles along each cube face edge
+            hexSubdivisions: { type: "integer", minimum: 12, maximum: 128 },    // hex: splits along each icosahedron edge
             tileGap: { type: "number", minimum: 0, maximum: 0.5 },              // share of a tile left as a gap
           },
         },
@@ -1140,6 +1146,56 @@ function zoomGestures(el, isActive, card) {
   return z;
 }
 
+// Hex tile centres: an icosahedron with each edge split n times, pushed out onto the sphere (10n^2 + 2 points).
+// Points are keyed by their exact integer weights on the icosahedron's corners, so a point on an edge shared by two
+// faces is made once. Each point gets its mean distance to its neighbours (the tile's width) and an x axis pointing
+// at one neighbour, so hexagons sit flat side to flat side.
+function hexGrid(n) {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+    [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
+  const F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+    [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  const ids = new Map(), pts = [], nbr = [];
+  const B = 12 * (n + 1);
+  const point = (w) => {   // w: [[corner, weight], ...] with weights summing to n
+    // Key: the non-zero (corner, weight) pairs in corner order, packed into one integer.
+    let key = 0;
+    const e = w.filter(p => p[1] > 0).sort((p, q) => p[0] - q[0]);
+    for (const [c, k] of e) key = key * B + c * (n + 1) + k + 1;
+    let id = ids.get(key);
+    if (id !== undefined) return id;
+    let x = 0, y = 0, z = 0;
+    for (const [c, k] of e) { x += V[c][0] * k; y += V[c][1] * k; z += V[c][2] * k; }
+    const l = Math.hypot(x, y, z);
+    id = pts.length / 3; ids.set(key, id); pts.push(x / l, y / l, z / l); nbr.push(new Set());
+    return id;
+  };
+  const link = (a, b) => { nbr[a].add(b); nbr[b].add(a); };
+  for (const [a, b, c] of F) {
+    const g = [];
+    for (let i = 0; i <= n; i++) { g.push([]); for (let j = 0; j <= n - i; j++) g[i].push(point([[a, n - i - j], [b, i], [c, j]])); }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n - i; j++) { link(g[i][j], g[i + 1][j]); link(g[i][j], g[i][j + 1]); link(g[i + 1][j], g[i][j + 1]); }
+  }
+  const count = pts.length / 3, x = new Float32Array(count * 3), spacing = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const px = pts[i * 3], py = pts[i * 3 + 1], pz = pts[i * 3 + 2];
+    let sum = 0, first = -1;
+    for (const j of nbr[i]) {
+      sum += Math.acos(Math.min(1, px * pts[j * 3] + py * pts[j * 3 + 1] + pz * pts[j * 3 + 2]));
+      if (first < 0) first = j;
+    }
+    spacing[i] = sum / nbr[i].size;
+    // Towards the first neighbour, flattened onto the tangent plane.
+    let ex = pts[first * 3] - px, ey = pts[first * 3 + 1] - py, ez = pts[first * 3 + 2] - pz;
+    const d = ex * px + ey * py + ez * pz;
+    ex -= d * px; ey -= d * py; ez -= d * pz;
+    const l = Math.hypot(ex, ey, ez);
+    x[i * 3] = ex / l; x[i * 3 + 1] = ey / l; x[i * 3 + 2] = ez / l;
+  }
+  return { count, dir: Float32Array.from(pts), x, spacing };
+}
+
 // ---------- Globe ----------
 async function globe() {
   const G = SITE.globe, T = G.terrain;
@@ -1224,14 +1280,17 @@ async function globe() {
     r * Math.cos(lat * D) * Math.cos(lon * D), r * Math.sin(lat * D), -r * Math.cos(lat * D) * Math.sin(lon * D));
   const latLonOf = v => [Math.asin(Math.max(-1, Math.min(1, v.y))) / D, Math.atan2(-v.z, v.x) / D];
 
-  // Cube-sphere grid: each face of a cube is split into N x N tiles, then pushed out onto the sphere.
-  const N = G.grid.tilesPerFaceEdge, FILL = 1 - G.grid.tileGap;
+  // Two tile layouts. Square: each face of a cube is split into N x N tiles, then pushed out onto the sphere.
+  // Hex: an icosahedron with each edge split HN times; every grid point is the centre of a hexagonal tile.
+  const HEX = G.grid.shape === "hex";
+  const N = G.grid.tilesPerFaceEdge, HN = G.grid.hexSubdivisions, FILL = 1 - G.grid.tileGap;
   const FACES = [
     [[1,0,0],[0,0,-1],[0,1,0]], [[-1,0,0],[0,0,1],[0,1,0]],
     [[0,1,0],[1,0,0],[0,0,-1]], [[0,-1,0],[1,0,0],[0,0,1]],
     [[0,0,1],[1,0,0],[0,1,0]],  [[0,0,-1],[-1,0,0],[0,1,0]],
   ].map(f => f.map(a => new THREE.Vector3(...a)));
-  const COUNT = 6 * N * N;
+  const HEXG = HEX ? hexGrid(HN) : null;
+  const COUNT = HEX ? HEXG.count : 6 * N * N;
   const tileKind = new Uint8Array(COUNT);   // 0 ocean, 1 land, 2 ice
   const tileTone = new Float32Array(COUNT), tileElev = new Float32Array(COUNT);
   const tileBay = new Uint8Array(COUNT), tileDelay = new Float32Array(COUNT);
@@ -1241,15 +1300,37 @@ async function globe() {
     lon - half / Math.cos(lat * D) > g.lon0 && lon + half / Math.cos(lat * D) < g.lon1);
   const regionOf = s => regionAt(s.lat, s.lon);
   const detailStops = STOPS.filter(regionOf).map(s => vecFromLatLon(s.lat, s.lon));
-  const RATIO = G.detail.sizeToDistance, REACH = ((Math.PI / 2) / N) / RATIO * 1.25, COS_REACH = Math.cos(REACH);
+  // Globe tile width in radians: a cube face spans 90 degrees; an icosahedron edge about 63.4.
+  const TOP_ANG = HEX ? Math.atan(2) / HN : (Math.PI / 2) / N;
+  const RATIO = G.detail.sizeToDistance, REACH = TOP_ANG / RATIO * 1.25, COS_REACH = Math.cos(REACH);
   const nearestDetailStop = v => { let d = Infinity; for (const p of detailStops) d = Math.min(d, v.angleTo(p)); return d; };
   const tileDir = new Float32Array(COUNT * 3), tileX = new Float32Array(COUNT * 3);   // outward axis, and the tile's own x axis
-  // Tile shape: a unit box standing on z = 0, without its bottom face (never visible).
-  // Box faces are +x, -x, +y, -y, +z, -z with 6 indices each, so the first 30 indices skip -z.
-  const baseGeo = new THREE.BoxGeometry(1, 1, 1);
-  baseGeo.translate(0, 0, 0.5);
-  baseGeo.setIndex(Array.from(baseGeo.index.array).slice(0, 30));
-  baseGeo.clearGroups();
+  const tileSize = new Float32Array(COUNT);   // tile width in radians, gap included
+  // Tile shape, standing on z = 0 with its top at z = 1 and no bottom face (never visible). Square: a unit box.
+  // Hex: a prism 1 across its flat sides, with flat sides facing +-x, so neighbours along x meet flat to flat.
+  let baseGeo;
+  if (HEX) {
+    const pos = [], nor = [], ind = [], r = 1 / Math.sqrt(3), ang = k => Math.PI / 6 + k * Math.PI / 3;
+    for (let k = 0; k < 6; k++) { pos.push(r * Math.cos(ang(k)), r * Math.sin(ang(k)), 1); nor.push(0, 0, 1); }
+    ind.push(0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5);
+    for (let k = 0; k < 6; k++) {
+      const a = ang(k), b = ang(k + 1), nx = Math.cos((a + b) / 2), ny = Math.sin((a + b) / 2), o = pos.length / 3;
+      pos.push(r * Math.cos(a), r * Math.sin(a), 0, r * Math.cos(b), r * Math.sin(b), 0,
+        r * Math.cos(b), r * Math.sin(b), 1, r * Math.cos(a), r * Math.sin(a), 1);
+      nor.push(nx, ny, 0, nx, ny, 0, nx, ny, 0, nx, ny, 0);
+      ind.push(o, o + 1, o + 2, o, o + 2, o + 3);
+    }
+    baseGeo = new THREE.BufferGeometry();
+    baseGeo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    baseGeo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+    baseGeo.setIndex(ind);
+  } else {
+    // Box faces are +x, -x, +y, -y, +z, -z with 6 indices each, so the first 30 indices skip -z.
+    baseGeo = new THREE.BoxGeometry(1, 1, 1);
+    baseGeo.translate(0, 0, 0.5);
+    baseGeo.setIndex(Array.from(baseGeo.index.array).slice(0, 30));
+    baseGeo.clearGroups();
+  }
   // Heights are worked out on the GPU. Each tile's matrix is set once (standing on the sphere, unit height), and
   // the vertex shader stretches it from per-tile data and a few uniforms, so zooming and loading detail cost no CPU.
   const heightUniforms = {
@@ -1282,7 +1363,7 @@ async function globe() {
   const tileMat = heightMaterial(false);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
   const xAxis = new THREE.Vector3(), yAxis = new THREE.Vector3(), basis = new THREE.Matrix4();
-  const size = (Math.PI / 2) / N * FILL;
+  const size = (Math.PI / 2) / N * FILL;   // square tiles all share one width
   const hash = i => { let x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); };
   const cubeToSphere = (f, a, b) => {
     const u = Math.tan(a * Math.PI / 4), v = Math.tan(b * Math.PI / 4);
@@ -1297,7 +1378,25 @@ async function globe() {
     return isLand(Math.asin(cs.y) / D, Math.atan2(-cs.z, cs.x) / D);
   };
   const OFFS = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
-  FACES.forEach(f => {
+  const isLandDir = v => isLand(Math.asin(Math.max(-1, Math.min(1, v.y))) / D, Math.atan2(-v.z, v.x) / D);
+  if (HEX) for (let g = 0; g < COUNT; g++) {
+    dir.fromArray(HEXG.dir, g * 3); xAxis.fromArray(HEXG.x, g * 3); yAxis.crossVectors(dir, xAxis);
+    const ang = HEXG.spacing[g], e = ang * 0.3;
+    const lat = Math.asin(Math.max(-1, Math.min(1, dir.y))) / D, lon = Math.atan2(-dir.z, dir.x) / D;
+    // Land where most of five samples (centre counted twice, four around it) are land, as for squares.
+    let votes = isLand(lat, lon) * 2;
+    for (const o of OFFS) votes += isLandDir(cs.copy(dir).addScaledVector(xAxis, o[0] * e).addScaledVector(yAxis, o[1] * e).normalize());
+    const land = votes >= 3, ice = land && (lat > T.iceLatitude.north || lat < T.iceLatitude.south);
+    tileKind[g] = ice ? 2 : land ? 1 : 0;
+    tileTone[g] = hash(g + 1);
+    tileElev[g] = land ? elevAt(lat, lon, ang / 2 / D) : 0;
+    tileSize[g] = ang * FILL;
+    dir.toArray(tileDir, g * 3); xAxis.toArray(tileX, g * 3);
+    let near = 0;
+    for (const p of detailStops) if (dir.dot(p) > COS_REACH) { near = 1; break; }
+    tileBay[g] = near;
+  }
+  else FACES.forEach(f => {
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const a = (i + 0.5) / N * 2 - 1, b = (j + 0.5) / N * 2 - 1, e = 0.6 / N;
       const u = Math.tan(a * Math.PI / 4), v = Math.tan(b * Math.PI / 4);
@@ -1312,7 +1411,7 @@ async function globe() {
       tileTone[idx] = t;
       tileElev[idx] = land ? elevAt(lat, lon, (Math.PI / 4) / N / D) : 0;
       xAxis.copy(f[1]).addScaledVector(dir, -dir.dot(f[1])).normalize();
-      dir.toArray(tileDir, idx * 3); xAxis.toArray(tileX, idx * 3);
+      dir.toArray(tileDir, idx * 3); xAxis.toArray(tileX, idx * 3); tileSize[idx] = size;
       let near = 0;   // within REACH of a detail stop: compare dot products against cos(REACH), no acos per tile
       for (const p of detailStops) if (dir.dot(p) > COS_REACH) { near = 1; break; }
       tileBay[idx] = near;
@@ -1324,12 +1423,23 @@ async function globe() {
   // Tiles are drawn in blocks (each cube face split 6 x 6), so blocks beyond the horizon or outside the view are
   // skipped entirely. Each block knows its tallest tile, so flat ocean blocks are dropped right at the horizon
   // while mountain blocks stay until their peaks have set.
+  // Hex tiles go in the block of the cube face patch their centre falls in, so both layouts cull the same way.
   const K = 6, CH = Math.ceil(N / K), chunks = [];
-  const tmpV = new THREE.Vector3();
-  for (let fi = 0; fi < 6; fi++) for (let ci = 0; ci < K; ci++) for (let cj = 0; cj < K; cj++) {
-    const idx = [];
+  const blockLists = Array.from({ length: 6 * K * K }, () => []);
+  if (HEX) for (let g = 0; g < COUNT; g++) {
+    const x = tileDir[g * 3], y = tileDir[g * 3 + 1], z = tileDir[g * 3 + 2];
+    let fi = 0, best = -2;
+    for (let k = 0; k < 6; k++) { const d = FACES[k][0].x * x + FACES[k][0].y * y + FACES[k][0].z * z; if (d > best) { best = d; fi = k; } }
+    const f = FACES[fi];
+    const a = Math.atan((f[1].x * x + f[1].y * y + f[1].z * z) / best) * 4 / Math.PI;
+    const b = Math.atan((f[2].x * x + f[2].y * y + f[2].z * z) / best) * 4 / Math.PI;
+    const ci = Math.min(K - 1, Math.max(0, Math.floor((a + 1) / 2 * K))), cj = Math.min(K - 1, Math.max(0, Math.floor((b + 1) / 2 * K)));
+    blockLists[(fi * K + ci) * K + cj].push(g);
+  }
+  else for (let fi = 0; fi < 6; fi++) for (let ci = 0; ci < K; ci++) for (let cj = 0; cj < K; cj++)
     for (let i = ci * CH; i < Math.min(N, (ci + 1) * CH); i++)
-      for (let j = cj * CH; j < Math.min(N, (cj + 1) * CH); j++) idx.push(fi * N * N + i * N + j);
+      for (let j = cj * CH; j < Math.min(N, (cj + 1) * CH); j++) blockLists[(fi * K + ci) * K + cj].push(fi * N * N + i * N + j);
+  for (const idx of blockLists) {
     if (!idx.length) continue;
     const n = idx.length, cgeo = baseGeo.clone(), mesh = new THREE.InstancedMesh(cgeo, tileMat, n);
     const data = new Float32Array(n * 3), delay = new Float32Array(n), center = new THREE.Vector3();
@@ -1341,20 +1451,22 @@ async function globe() {
       const dx = tileDir[g3], dy = tileDir[g3 + 1], dz = tileDir[g3 + 2];
       const xx = tileX[g3], xy = tileX[g3 + 1], xz = tileX[g3 + 2];
       const yx = dy * xz - dz * xy, yy = dz * xx - dx * xz, yz = dx * xy - dy * xx;   // y = dir x x
-      M[o] = xx * size; M[o + 1] = xy * size; M[o + 2] = xz * size; M[o + 3] = 0;
-      M[o + 4] = yx * size; M[o + 5] = yy * size; M[o + 6] = yz * size; M[o + 7] = 0;
+      const w = tileSize[g];
+      M[o] = xx * w; M[o + 1] = xy * w; M[o + 2] = xz * w; M[o + 3] = 0;
+      M[o + 4] = yx * w; M[o + 5] = yy * w; M[o + 6] = yz * w; M[o + 7] = 0;
       M[o + 8] = dx; M[o + 9] = dy; M[o + 10] = dz; M[o + 11] = 0;
       M[o + 12] = dx; M[o + 13] = dy; M[o + 14] = dz; M[o + 15] = 1;
       data[k * 3] = tileElev[g]; data[k * 3 + 1] = tileKind[g] > 0 ? 1 : 0; data[k * 3 + 2] = tileBay[g];
       center.x += dx; center.y += dy; center.z += dz;
     }
     center.normalize();
-    let minDot = 1;
+    let minDot = 1, widest = 0;
     for (let k = 0; k < n; k++) {
       const g3 = idx[k] * 3;
       minDot = Math.min(minDot, center.x * tileDir[g3] + center.y * tileDir[g3 + 1] + center.z * tileDir[g3 + 2]);
+      widest = Math.max(widest, tileSize[idx[k]]);
     }
-    const radius = Math.acos(Math.max(-1, Math.min(1, minDot))) + size;
+    const radius = Math.acos(Math.max(-1, Math.min(1, minDot))) + widest;
     cgeo.setAttribute("aTile", new THREE.InstancedBufferAttribute(data, 3));
     const delayAttr = new THREE.InstancedBufferAttribute(delay, 1);
     cgeo.setAttribute("aDelay", delayAttr);
@@ -1404,6 +1516,35 @@ async function globe() {
   function buildDetail() {
     if (DT) return DT;
     const L = { dir: [], quat: [], size: [], elev: [], kind: [], tone: [], parent: [] };
+    // One detail tile: centre, its x axis in the tangent plane, and its width in radians.
+    function emit(dir, xAx, ang, parent) {
+      const lat = Math.asin(Math.max(-1, Math.min(1, dir.y))) / D, lon = Math.atan2(-dir.z, dir.x) / D;
+      const land = landFrac(lat, lon, ang / 2 / D) >= 0.5;
+      yAxis.crossVectors(dir, xAx);
+      basis.makeBasis(xAx, yAxis, dir);
+      q.setFromRotationMatrix(basis);
+      L.dir.push(dir.x, dir.y, dir.z); L.quat.push(q.x, q.y, q.z, q.w);
+      L.size.push(ang * FILL); L.kind.push(land ? 1 : 0); L.tone.push(hash(L.tone.length + 7919)); L.parent.push(parent);
+      L.elev.push(land ? elevAt(lat, lon, ang / 2 / D) : 0);
+    }
+    // Hex: a hexagon becomes seven, a centre and a ring of six, sqrt(7) times smaller and turned by
+    // atan(sqrt(3) / 5) (about 19.1 degrees). Across neighbouring hexagons the pieces form one finer hex grid.
+    const TURN = Math.atan2(Math.sqrt(3), 5), SQ7 = Math.sqrt(7);
+    function splitHex(dir, xAx, ang, parent) {
+      const d = Math.max(0, nearestDetailStop(dir) - ang * 0.7);
+      if (!(ang / SQ7 >= MIN_TILE && ang > d * RATIO)) { emit(dir, xAx, ang, parent); return; }
+      const c = ang / SQ7, yAx = new THREE.Vector3().crossVectors(dir, xAx);
+      const ax = xAx.clone().multiplyScalar(Math.cos(TURN)).addScaledVector(yAx, -Math.sin(TURN));
+      const ay = new THREE.Vector3().crossVectors(dir, ax);
+      splitHex(dir, ax, c, parent);
+      for (let k = 0; k < 6; k++) {
+        const t = k * Math.PI / 3;
+        const off = ax.clone().multiplyScalar(Math.cos(t)).addScaledVector(ay, Math.sin(t));
+        const cd = dir.clone().multiplyScalar(Math.cos(c)).addScaledVector(off, Math.sin(c)).normalize();
+        const cx = ax.clone().addScaledVector(cd, -ax.dot(cd)).normalize();
+        splitHex(cd, cx, c, parent);
+      }
+    }
     function split(fi, a0, b0, span, parent) {
       const f = FACES[fi];
       const dir = cubeToSphere(f, a0 + span / 2, b0 + span / 2);
@@ -1415,19 +1556,14 @@ async function globe() {
         split(fi, a0, b0 + h, h, parent); split(fi, a0 + h, b0 + h, h, parent);
         return;
       }
-      const lat = Math.asin(Math.max(-1, Math.min(1, dir.y))) / D, lon = Math.atan2(-dir.z, dir.x) / D;
-      const land = landFrac(lat, lon, ang / 2 / D) >= 0.5;
-      const t = hash(L.tone.length + 7919);
-      xAxis.copy(f[1]).addScaledVector(dir, -dir.dot(f[1])).normalize();
-      yAxis.crossVectors(dir, xAxis);
-      basis.makeBasis(xAxis, yAxis, dir);
-      q.setFromRotationMatrix(basis);
-      L.dir.push(dir.x, dir.y, dir.z); L.quat.push(q.x, q.y, q.z, q.w);
-      L.size.push(ang * FILL); L.kind.push(land ? 1 : 0); L.tone.push(t); L.parent.push(parent);
-      L.elev.push(land ? elevAt(lat, lon, ang / 2 / D) : 0);
+      emit(dir, xAxis.copy(f[1]).addScaledVector(dir, -dir.dot(f[1])).normalize().clone(), ang, parent);
     }
     for (let idx = 0; idx < COUNT; idx++) {
       if (!tileBay[idx]) continue;
+      if (HEX) {
+        splitHex(new THREE.Vector3().fromArray(tileDir, idx * 3), new THREE.Vector3().fromArray(tileX, idx * 3), HEXG.spacing[idx], idx);
+        continue;
+      }
       const fi = Math.floor(idx / (N * N)), rem = idx % (N * N), i = Math.floor(rem / N), j = rem % N;
       split(fi, i / N * 2 - 1, j / N * 2 - 1, 2 / N, idx);
     }
