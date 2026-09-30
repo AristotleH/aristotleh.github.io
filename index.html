@@ -310,7 +310,7 @@ h2{font-size:1.45rem;line-height:1.2}
   },
   "order": "newest-first",
   "layout": [
-    { "section": "projects", "label": "Projects", "emptyText": "Projects I build will be listed here." },
+    { "section": "projects", "label": "Projects" },
     { "section": "current", "label": "Now" },
     { "section": "history", "label": "History" }
   ],
@@ -570,13 +570,12 @@ const SITE_SCHEMA = {
     order: { enum: ["as-listed", "oldest-first", "newest-first"] },
     // The page after the intro, top to bottom. "current" is every stop that ends "present", "history" every
     // other stop (both sorted by `order`), and "projects" one card listing `projects`. A label is shown on the
-    // section's first card; the projects card uses it as its title, and shows emptyText while the list is empty
-    // (without emptyText, an empty projects section is left out).
+    // section's first card, and the projects card uses it as its title. An empty section is left out.
     layout: {
       type: "array", minItems: 2, maxItems: 3,
       items: {
         type: "object", additionalProperties: false, required: ["section"],
-        properties: { section: { enum: ["current", "projects", "history"] }, label: TEXT, emptyText: TEXT },
+        properties: { section: { enum: ["current", "projects", "history"] }, label: TEXT },
       },
     },
     // Pages hosted on this site, each in its own folder under /projects/. `stop` ties one to a place: it's also
@@ -936,8 +935,8 @@ const SEQ = [];
 for (const b of SITE.layout) {
   let items;
   if (b.section === "projects") {
-    if (!PROJECTS.length && !b.emptyText) continue;
-    PROJECTS_STEP = { id: "projects", title: b.label || "Projects", emptyText: b.emptyText || "",
+    if (!PROJECTS.length) continue;
+    PROJECTS_STEP = { id: "projects", title: b.label || "Projects",
       lat: INTRO.lat, lon: INTRO.lon, dist: INTRO.dist };
     items = [PROJECTS_STEP];
   } else {
@@ -998,9 +997,9 @@ function projectsCard(step) {
   const list = PROJECTS.map(pr => `<li>
   <a class="proj-link" href="${esc(pr.path)}"><span class="proj-title">${esc(pr.title)}</span>${pr.date ? `<span class="proj-date">${esc(fmtMonth(pr.date))}</span>` : ""}</a>
   <p class="body">${esc(pr.summary)}</p>${tagsHtml(pr.tags)}</li>`).join("");
-  const count = PROJECTS.length ? `${PROJECTS.length} ${PROJECTS.length === 1 ? "project" : "projects"}` : "Coming soon";
+  const count = `${PROJECTS.length} ${PROJECTS.length === 1 ? "project" : "projects"}`;
   return `<article class="card"><p class="eyebrow">${markHtml("cube")}${esc(count)}</p><h2>${esc(step.title)}</h2>
-  ${PROJECTS.length ? `<ul class="projects">${list}</ul>` : `<p class="body">${esc(step.emptyText)}</p>`}</article>`;
+  <ul class="projects">${list}</ul></article>`;
 }
 function cardOf(s) {
   if (s === PROJECTS_STEP) return projectsCard(s);
@@ -2140,11 +2139,10 @@ function kickerLines(s, inner) {
 }
 function projectsBox(step, inner) {
   const lines = [];
-  const count = PROJECTS.length ? `${PROJECTS.length} ${PROJECTS.length === 1 ? "PROJECT" : "PROJECTS"}` : "COMING SOON";
+  const count = `${PROJECTS.length} ${PROJECTS.length === 1 ? "PROJECT" : "PROJECTS"}`;
   lines.push([{ t: MARK.cube + " ", cls: "a-mk" }, { t: count, cls: "a-dim" }], "");
   for (const l of wrap(step.title.toUpperCase(), inner)) lines.push([{ t: l, cls: "a-ink" }]);
   lines.push([{ t: "=".repeat(Math.min(inner, toAscii(step.title).length)), cls: "a-dim a-deco" }]);
-  if (!PROJECTS.length) lines.push("", ...wrap(step.emptyText, inner));
   for (const pr of PROJECTS) {
     lines.push("");
     const title = toAscii(pr.title), date = pr.date ? toAscii(fmtMonth(pr.date)).toUpperCase() : "";
@@ -2526,7 +2524,7 @@ ${s.tags && s.tags.length ? `<p>${s.tags.map(esc).join(", ")}</p>` : ""}${proj}<
     if (b.section === "projects") {
       if (!PROJECTS_STEP) return "";
       const list = PROJECTS.map(pr => `<li><a href="${esc(pr.path)}">${esc(pr.title)}</a>${pr.date ? ` (${esc(fmtMonth(pr.date))})` : ""}: ${esc(pr.summary)}</li>`).join("\n");
-      return `<h2>${esc(PROJECTS_STEP.title)}</h2>\n${PROJECTS.length ? `<ul>\n${list}\n</ul>` : `<p>${esc(PROJECTS_STEP.emptyText)}</p>`}`;
+      return `<h2>${esc(PROJECTS_STEP.title)}</h2>\n<ul>\n${list}\n</ul>`;
     }
     const items = STOPS.filter(s => isCurrent(s) === (b.section === "current"));
     if (!items.length) return "";
