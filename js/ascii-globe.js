@@ -87,7 +87,7 @@ export function asciiGlobe() {
   pre.addEventListener("pointercancel", end);
 
   let rowEls = [], rowHtml = [], lastDraw = 0;
-  const route = STOPS.filter(s => KINDS[s.kind].onRoute);
+  const route = SITE.globe.routeArcs ? STOPS.filter(s => KINDS[s.kind].onRoute) : [];
   const RAMP_LAND = "*#%@", RAMP_ICE = "*#%";
   let wasIntro = null;
 

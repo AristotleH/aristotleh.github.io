@@ -150,6 +150,8 @@ export const SITE_SCHEMA = {
     globe: {
       type: "object", additionalProperties: false, required: ["grid", "terrain", "detail", "camera", "layers"],
       properties: {
+        // Dashed arcs joining the school and work stops in order.
+        routeArcs: { type: "boolean" },
         grid: {
           type: "object", additionalProperties: false, required: ["shape", "tilesPerFaceEdge", "hexSubdivisions", "tileGap"],
           properties: {

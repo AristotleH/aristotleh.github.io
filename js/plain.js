@@ -5,7 +5,7 @@ export function renderPlain() {
   const el = document.getElementById("plain");
   const links = (P.links || []).map(l => `<a href="${esc(l.url)}">${esc(l.label)}</a>`).join(" | ");
   const stopHtml = s => {
-    const head = `<h3>${esc(s.title)}</h3>\n<p><em>${esc(eyebrowOf(s))}</em><br>${esc(s.place)}</p>`;
+    const head = `<h3>${esc(s.title)}</h3>\n<p><em>${esc(eyebrowOf(s))}</em></p>`;
     const own = projectsAt(s);
     const proj = own.length ? `\n<p>Projects: ${own.map(pr => `<a href="${esc(pr.path)}">${esc(pr.title)}</a>`).join(", ")}</p>` : "";
     if (KINDS[s.kind].card === "photo") {

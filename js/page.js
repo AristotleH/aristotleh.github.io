@@ -1,22 +1,21 @@
 // The page: one section per step with its card (and an empty box the ASCII view fills), scroll tracking, and the
 // stop bar.
-import { ALL, INTRO, KINDS, MARKERS, P, PROJECTS, PROJECTS_STEP, SEQ, STOPS, esc, eyebrowOf, fmtMonth, projectsAt, reduceMotion, shapeOf } from "./site.js";
+import { ALL, INTRO, KINDS, MARKERS, P, PROJECTS, PROJECTS_STEP, SEQ, STOPS, esc, fmtMonth, eyebrowOf, projectsAt, reduceMotion } from "./site.js";
 import { MODE } from "./mode.js";
-import { asciiCoord, toAscii } from "./ascii-text.js";
+import { toAscii } from "./ascii-text.js";
 
 export const markHtml = shape => `<span class="mark${shape === "diamond" ? " diamond" : ""}"></span>`;
-export const tagsHtml = tags => tags && tags.length ? `<ul class="tags">${tags.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : "";
+export const tagsHtml = tags => tags && tags.length ? `<p class="tags">${tags.map(esc).join(", ")}</p>` : "";
 export function projectsCard(step) {
   const list = PROJECTS.map(pr => `<li>
   <a class="proj-link" href="${esc(pr.path)}"><span class="proj-title">${esc(pr.title)}</span>${pr.date ? `<span class="proj-date">${esc(fmtMonth(pr.date))}</span>` : ""}</a>
   <p class="body">${esc(pr.summary)}</p>${tagsHtml(pr.tags)}</li>`).join("");
-  const count = `${PROJECTS.length} ${PROJECTS.length === 1 ? "project" : "projects"}`;
-  return `<article class="card"><p class="eyebrow">${markHtml("cube")}${esc(count)}</p><h2>${esc(step.title)}</h2>
+  return `<article class="card"><h2>${esc(step.title)}</h2>
   <ul class="projects">${list}</ul></article>`;
 }
 export function cardOf(s) {
   if (s === PROJECTS_STEP) return projectsCard(s);
-  const head = `<p class="eyebrow">${markHtml(shapeOf(s))}${esc(eyebrowOf(s))}</p><h2>${esc(s.title)}</h2>`;
+  const head = `<h2>${esc(s.title)}</h2><p class="eyebrow">${esc(eyebrowOf(s))}</p>`;
   let inner;
   if (KINDS[s.kind].card === "photo") {
     const media = s.photo.src
@@ -28,7 +27,7 @@ export function cardOf(s) {
   }
   const own = projectsAt(s);
   if (own.length) inner += `<p class="stop-projects">Projects: ${own.map(pr => `<a href="${esc(pr.path)}">${esc(pr.title)}</a>`).join(", ")}</p>`;
-  return `<article class="card">${head}${inner}<p class="coords">${esc(s.place)}</p></article>`;
+  return `<article class="card">${head}${inner}</article>`;
 }
 export let sections = [];
 
@@ -72,15 +71,11 @@ export function updateActive() {
     if (window.onStopChange) window.onStopChange(active);
   }
 }
-// The school, company or place, and its coordinates. The overview has no single place, so no coordinates.
+// The name of the school or company on screen, or yours on the intro.
 export function renderHud(i = active) {
   const s = ALL[i], ascii = MODE === "ascii";
-  document.getElementById("hud-count").textContent =
-    `${String(i).padStart(2, "0")}${ascii ? "/" : " / "}${String(ALL.length - 1).padStart(2, "0")}`;
-  const name = s === INTRO ? "Overview" : s.title;
-  document.getElementById("hud-name").textContent = ascii ? toAscii(name).toUpperCase() : name;
-  document.getElementById("hud-xy").textContent = s === INTRO || s === PROJECTS_STEP ? "" : ascii ? asciiCoord(s.lat, s.lon) :
-    `${Math.abs(s.lat).toFixed(2)}° ${s.lat >= 0 ? "N" : "S"} ${Math.abs(s.lon).toFixed(2)}° ${s.lon >= 0 ? "E" : "W"}`;
+  const name = s === INTRO ? P.name : s.title;
+  document.getElementById("hud-name").textContent = ascii ? toAscii(name) : name;
   document.getElementById("prev").textContent = ascii ? "^" : "↑";
   document.getElementById("next").textContent = ascii ? "v" : "↓";
 }
@@ -102,14 +97,15 @@ export function sizeHud() {
 export function initPage() {
   document.title = P.name;
   const linksHtml = (P.links || []).map(l => `<a href="${esc(l.url)}">${esc(l.label)}</a>`).join("");
-  document.getElementById("topbar").innerHTML = linksHtml;
-  const legend = [...new Set(STOPS.map(s => KINDS[s.kind].marker))]
-    .map(m => `<li>${markHtml(MARKERS[m].shape)}${esc(MARKERS[m].legend)}</li>`).join("");
+  // A legend only when there's more than one kind of pin to tell apart.
+  const used = [...new Set(STOPS.map(s => KINDS[s.kind].marker))];
+  const legend = used.length > 1
+    ? `<ul class="legend">${used.map(m => `<li>${markHtml(MARKERS[m].shape)}${esc(MARKERS[m].legend)}</li>`).join("")}</ul>` : "";
   document.getElementById("intro").innerHTML = `<article class="card">
-  <p class="eyebrow">${markHtml("cube")}${esc(P.headline)} · ${esc(P.location)}</p>
   <h1>${esc(P.name)}</h1>
+  <p class="eyebrow">${esc(P.headline)}, ${esc(P.location)}</p>
   <p class="lede">${esc(P.intro)}</p>
-  <ul class="legend">${legend}</ul>
+  ${legend}
   ${linksHtml ? `<div class="links">${linksHtml}</div>` : ""}
   <p class="fallback hint">This browser can't draw the 3D globe, so the places are listed as text below.</p>
 </article><pre class="abox"></pre>`;

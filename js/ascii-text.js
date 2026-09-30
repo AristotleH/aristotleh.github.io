@@ -120,9 +120,6 @@ export function boxHtml(lines, inner) {
   });
   return [`<span class="ln a-deco">${edge}</span>`, ...body, `<span class="ln a-deco">${edge}</span>`].join("");
 }
-export function asciiCoord(lat, lon) {
-  return `${Math.abs(lat).toFixed(2)}${lat >= 0 ? "N" : "S"} ${Math.abs(lon).toFixed(2)}${lon >= 0 ? "E" : "W"}`;
-}
 export const MARK = { cube: "@", diamond: "o" };
 
 // Photo stops: the picture itself as ASCII art (brightness to characters), or a drawn frame when there is none.
@@ -181,8 +178,6 @@ export function measureBox() {
 }
 export function introBox(inner) {
   const lines = [];
-  for (const l of wrap(`${P.headline} * ${P.location}`.toUpperCase(), inner)) lines.push([{ t: l, cls: "a-dim" }]);
-  lines.push("");
   let rows = banner(P.name, inner + 2);
   const indent = Math.min(...rows.filter(r => r.trim()).map(r => r.length - r.trimStart().length));
   rows = rows.map(r => r.slice(indent));
@@ -192,15 +187,19 @@ export function introBox(inner) {
   rows.forEach((r, i) => lines.push({ tight: true, wide: true,
     segs: [{ t: r ? lead + r : "", cls: "a-ink a-deco", plain: i === 0 ? P.name : "" }] }));
   lines.push("");
-  lines.push(...wrap(P.intro, inner));
+  for (const l of wrap(`${P.headline}, ${P.location}`, inner)) lines.push([{ t: l, cls: "a-dim" }]);
   lines.push("");
+  lines.push(...wrap(P.intro, inner));
+  // A legend only when there's more than one kind of pin to tell apart.
   const used = [...new Set(STOPS.map(s => KINDS[s.kind].marker))];
-  const legend = [];
-  used.forEach((m, i) => {
-    if (i) legend.push({ t: "   " });
-    legend.push({ t: MARK[MARKERS[m].shape], cls: "a-mk" }, { t: " " + toAscii(MARKERS[m].legend).toLowerCase() });
-  });
-  lines.push(legend);
+  if (used.length > 1) {
+    const legend = [];
+    used.forEach((m, i) => {
+      if (i) legend.push({ t: "   " });
+      legend.push({ t: MARK[MARKERS[m].shape], cls: "a-mk" }, { t: " " + toAscii(MARKERS[m].legend).toLowerCase() });
+    });
+    lines.push("", legend);
+  }
   if (P.links && P.links.length) {
     lines.push("");
     const segs = [];
@@ -224,8 +223,6 @@ export function linkRows(items, inner) {
 }
 export function projectsBox(step, inner) {
   const lines = [];
-  const count = `${PROJECTS.length} ${PROJECTS.length === 1 ? "PROJECT" : "PROJECTS"}`;
-  lines.push([{ t: MARK.cube + " ", cls: "a-mk" }, { t: count, cls: "a-dim" }], "");
   for (const l of wrap(step.title.toUpperCase(), inner)) lines.push([{ t: l, cls: "a-ink" }]);
   lines.push([{ t: "=".repeat(Math.min(inner, toAscii(step.title).length)), cls: "a-dim a-deco" }]);
   for (const pr of PROJECTS) {
@@ -240,11 +237,9 @@ export function projectsBox(step, inner) {
 }
 export function stopBox(s, inner, art) {
   const lines = [];
-  wrap(eyebrowOf(s).toUpperCase(), inner - 2).forEach((l, i) =>
-    lines.push([{ t: i ? "  " : MARK[shapeOf(s)] + " ", cls: "a-mk" }, { t: l, cls: "a-dim" }]));
-  lines.push("");
   for (const l of wrap(s.title.toUpperCase(), inner)) lines.push([{ t: l, cls: "a-ink" }]);
   lines.push([{ t: "=".repeat(Math.min(inner, toAscii(s.title).length)), cls: "a-dim a-deco" }]);
+  for (const l of wrap(eyebrowOf(s), inner)) lines.push([{ t: l, cls: "a-dim" }]);
   if (KINDS[s.kind].card === "photo") {
     lines.push("");
     const w = inner - 4, frame = art || placeholderArt(w);
@@ -267,8 +262,6 @@ export function stopBox(s, inner, art) {
   }
   const own = projectsAt(s);
   if (own.length) lines.push("", [{ t: "PROJECTS", cls: "a-dim" }], ...linkRows(own, inner));
-  lines.push("");
-  wrap(s.place, inner - 2).forEach((l, i) => lines.push([{ t: i ? "  " : "@ ", cls: "a-dim" }, { t: l, cls: "a-dim" }]));
   return boxHtml(lines, inner);
 }
 export const photoArtCache = new Map();

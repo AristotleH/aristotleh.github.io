@@ -221,6 +221,7 @@
     }
   ],
   "globe": {
+    "routeArcs": false,
     "grid": {
       "shape": "hex",
       "tilesPerFaceEdge": 96,

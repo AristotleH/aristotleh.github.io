@@ -597,7 +597,7 @@ export async function globe() {
 
   // Trail between school/work stops, in order
   const trailMat = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.012, gapSize: 0.008, transparent: true, opacity: 0.9 });
-  const route = STOPS.filter(s => KINDS[s.kind].onRoute);
+  const route = SITE.globe.routeArcs ? STOPS.filter(s => KINDS[s.kind].onRoute) : [];
   for (let i = 0; i + 1 < route.length; i++) {
     const A = vecFromLatLon(route[i].lat, route[i].lon), B = vecFromLatLon(route[i + 1].lat, route[i + 1].lon);
     const ang = A.angleTo(B), pts = [];

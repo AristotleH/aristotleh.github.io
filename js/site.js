@@ -4,8 +4,6 @@ import { checkSite } from "./schema.js";
 export const EARTH_KM = 6371;
 export const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 export const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
-export const fmtLat = v => `${Math.abs(v).toFixed(4)}° ${v >= 0 ? "N" : "S"}`;
-export const fmtLon = v => `${Math.abs(v).toFixed(4)}° ${v >= 0 ? "E" : "W"}`;
 export const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 export const fmtMonth = m => m === "present" ? "present" : `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
 
@@ -97,14 +95,13 @@ for (const b of SITE.layout) {
 export const projectsAt = s => PROJECTS.filter(pr => pr.stop === s.id);
 // Every step of the page: the intro, then SEQ.
 export const ALL = [INTRO, ...SEQ];
-// A stop's dates, employment type and workplace, or its photo date.
+// A stop's dates and place, or its photo date and place.
 export function eyebrowOf(s) {
   if (KINDS[s.kind].card === "photo") {
-    if (s.photo.placeholder) return "Example photo stop";
-    return s.photo.taken ? `Photo · ${fmtMonth(s.photo.taken)}` : "Photo";
+    return [s.photo.taken && fmtMonth(s.photo.taken), s.place].filter(Boolean).join(", ");
   }
   const dates = s.end ? `${fmtMonth(s.start)} – ${fmtMonth(s.end)}` : fmtMonth(s.start);
-  return [dates, s.employment, s.workplace].filter(Boolean).join(" · ");
+  return `${dates}, ${s.place}`;
 }
 // Elevation layers, decoded once and shared by the 3D globe and the ASCII globe.
 export const TERRAIN = (async () => {
