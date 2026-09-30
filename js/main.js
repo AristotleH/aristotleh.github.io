@@ -6,6 +6,10 @@ import { globe } from "./globe.js";
 import { renderBoxes } from "./ascii-text.js";
 import { asciiGlobe } from "./ascii-globe.js";
 import { renderPlain } from "./plain.js";
+import { startTiles } from "./tiles-client.js";
+
+// The globe's tiles take the longest to make, so in 3D their build starts now, alongside everything else.
+if (MODE === "3d") startTiles();
 
 let globeStarted = false, asciiStarted = false;
 function setMode(m, save) {

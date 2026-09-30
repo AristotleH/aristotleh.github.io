@@ -14,7 +14,8 @@ A static site served by GitHub Pages at www.aristotleh.com. It shows a globe of 
   - `site.js`: loads and checks the data, and derives what every view shares.
   - `mode.js`: the current view.
   - `page.js`: cards, scroll tracking, and the stop bar.
-  - `globe.js`, `hexgrid.js`, `gestures.js`: the 3D globe, its hexagon grid, and drag/zoom gestures.
+  - `globe.js`, `gestures.js`: the 3D globe (three.js) and its drag/zoom gestures.
+  - `tiles.js`, `hexgrid.js`, `terrain.js`: the globe's tiles, grid and land/elevation lookups, as plain math. `tiles-worker.js` runs them off the main thread and `tiles-client.js` starts it; without module workers they run on the page.
   - `ascii-text.js`, `ascii-fonts.js`, `ascii-globe.js`: the ASCII view.
   - `plain.js`: the HTML view.
 
