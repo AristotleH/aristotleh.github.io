@@ -549,9 +549,12 @@ export async function globe() {
       const ms = pinScale(m.holder.position);
       m.holder.scale.setScalar(ms * m.vis);
       m.holder.visible = m.vis > 0.01;
-      m.top.copy(m.dir).multiplyScalar(m.base + (m.H + 0.012) * ms);
+      // The label sits just above the head as drawn: the head's centre on screen, less the on-screen radius of a ball
+      // around the cube at its current size (a corner reaches sqrt(3) x the half-width from the centre).
+      m.top.copy(m.dir).multiplyScalar(m.base + m.H * ms);
       const [x, y] = toScreen(m.top);
-      const tf = `translate(${x.toFixed(1)}px, ${(y - 16).toFixed(1)}px) translate(-50%, -100%)`;
+      const rPx = 0.009 * Math.sqrt(3) * m.scale * ms * m.vis / (camera.position.distanceTo(m.top) * Math.tan(camera.fov * Math.PI / 360)) * Hh / 2;
+      const tf = `translate(${x.toFixed(1)}px, ${(y - rPx - 6).toFixed(1)}px) translate(-50%, -100%)`;
       if (tf !== m.tf) { m.label.style.transform = tf; m.tf = tf; }
       const settled = ang < Math.max(0.0004, alt * 0.3);
       // Booleans only: classList.toggle(name, undefined) flips the class instead of clearing it.
