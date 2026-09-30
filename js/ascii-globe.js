@@ -1,5 +1,5 @@
 // The ASCII globe: every character cell casts a ray at the sphere; what it hits picks the glyph and color.
-import { ALL, INTRO, KINDS, REGIONS, SITE, STOPS, TERRAIN, reduceMotion, shapeOf } from "./site.js";
+import { ALL, EARTH_KM, INTRO, KINDS, REGIONS, SITE, STOPS, TERRAIN, reduceMotion, shapeOf } from "./site.js";
 import { MODE } from "./mode.js";
 import { active, syncScrollZone } from "./page.js";
 import { zoomGestures } from "./gestures.js";
@@ -46,6 +46,8 @@ export function asciiGlobe() {
   const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const fromLL = (lat, lon) => [Math.cos(lat * D) * Math.cos(lon * D), Math.sin(lat * D), -Math.cos(lat * D) * Math.sin(lon * D)];
+  // Stops inside a detail region: the overview can zoom all the way in near these, where the fine land data is.
+  const detailDirs = STOPS.filter(s => regionAt(s.lat, s.lon)).map(s => fromLL(s.lat, s.lon));
   const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   // Camera: the same path as the 3D globe (ease toward the stop, pull back on long moves, tilt in close-ups).
@@ -97,7 +99,7 @@ export function asciiGlobe() {
     const stop = ALL[active], overview = stop === INTRO, still = reduceMotion.matches;
     if (overview !== wasIntro) { pre.classList.toggle("can-drag", overview); wasIntro = overview; syncScrollZone(); }
     if (overview) {
-      if (!drag.on && !still && now - drag.lastMove > 2500) spin += dt * G.camera.idleSpinDegPerSec;
+      if (!drag.on && !still && now - drag.lastMove > 2500) spin += dt * G.camera.idleSpinDegPerSec * Math.min(1, Math.exp(cur.logAlt) / (INTRO.dist - 1));
       userLat = Math.max(-55, Math.min(50, userLat));
     } else { spin *= Math.pow(0.1, dt); userLat *= Math.pow(0.1, dt); pz.log *= Math.pow(0.1, dt); }
     const tgt = fromLL(stop.lat + userLat, stop.lon + spin);
@@ -106,6 +108,12 @@ export function asciiGlobe() {
     cur.dir = norm([cur.dir[0] + (tgt[0] - cur.dir[0]) * k, cur.dir[1] + (tgt[1] - cur.dir[1]) * k, cur.dir[2] + (tgt[2] - cur.dir[2]) * k]);
     const aspectPx = (cols * cw) / (rows * ch);
     const narrowBoost = aspectPx < 1 ? 1 + (1 - aspectPx) * 1.1 * smooth(0.6, 2.2, stop.dist - 1) : 1;
+    // As in 3D: deep zoom only near detail; elsewhere the overview stops higher and eases back up if you pan away.
+    if (overview) {
+      const near = detailDirs.some(p => Math.acos(Math.max(-1, Math.min(1, dot(cur.dir, p)))) < 0.15);
+      const floorLog = Math.log(0.35 * G.detail.loadBelowAltitudeKm / EARTH_KM / (INTRO.dist - 1));
+      if (!near && pz.log < floorLog) pz.log = still ? floorLog : pz.log + (floorLog - pz.log) * (1 - Math.exp(-dt * 3));
+    }
     const baseLog = Math.log((stop.dist - 1) * narrowBoost) + pz.log;
     const tLog = Math.min(baseLog + (still ? 0 : Math.min(2.6, ang * 5)), Math.max(baseLog, Math.log(2.6)));
     const kz = still ? 1 : 1 - Math.exp(-dt * 8);

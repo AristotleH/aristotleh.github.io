@@ -196,7 +196,7 @@ export const SITE_SCHEMA = {
             // How far the overview can zoom by wheel or pinch, as factors of its starting altitude.
             overviewZoom: {
               type: "object", additionalProperties: false, required: ["in", "out"],
-              properties: { in: { type: "number", minimum: 1, maximum: 20 }, out: { type: "number", minimum: 1, maximum: 4 } },
+              properties: { in: { type: "number", minimum: 1, maximum: 400 }, out: { type: "number", minimum: 1, maximum: 4 } },
             },
           },
         },

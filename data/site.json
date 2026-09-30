@@ -257,7 +257,7 @@
       "dragSpeed": 0.6,
       "idleSpinDegPerSec": 4,
       "overviewZoom": {
-        "in": 4,
+        "in": 150,
         "out": 1.5
       }
     },

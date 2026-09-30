@@ -133,7 +133,8 @@ export async function globe() {
     M.geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(...d.center), 2 * Math.sin(d.radius / 2) + 0.07);
     mesh.visible = false;
     mesh.renderOrder = -1;   // nearest to the camera when shown, so draw it first
-    DT = { mesh, M, count: d.count, parent: d.parent, kind: d.kind, tone: d.tone, elev: d.elev };
+    DT = { mesh, M, count: d.count, parent: d.parent, kind: d.kind, tone: d.tone, elev: d.elev,
+      center: new THREE.Vector3(...d.center), radius: d.radius };
     if (detailFocus) setDetailFocus(detailFocus);
     paintDetail();
     scene.add(mesh);
@@ -350,7 +351,7 @@ export async function globe() {
 
   // Camera: look at a point on the globe from slightly south of it, pulled back during long moves.
   const cur = { dir: vecFromLatLon(INTRO.lat, INTRO.lon), logAlt: Math.log(INTRO.dist - 1), dist: INTRO.dist };
-  let detailP = 0, lastM = 0, lastDetail = -1, detailOn = false;
+  let detailP = 0, lastM = 0, lastDetail = -1, detailOn = false, lowM = 0;
   let spin = 0, userLat = 0;
   // Drag and zoom the globe while the intro is on screen.
   const drag = { on: false, id: null, x: 0, y: 0, t: 0, vLon: 0, vLat: 0, lastMove: -1e9 };
@@ -404,7 +405,8 @@ export async function globe() {
         // Coast after a flick, then resume the slow spin once the globe has been left alone.
         spin += drag.vLon * dt; userLat += drag.vLat * dt;
         drag.vLon *= Math.pow(0.05, dt); drag.vLat *= Math.pow(0.05, dt);
-        if (!still && now - drag.lastMove > 2500) spin += dt * G.camera.idleSpinDegPerSec;
+        // The spin slows as you zoom in, so the ground passes at about the same pace on screen at any altitude.
+        if (!still && now - drag.lastMove > 2500) spin += dt * G.camera.idleSpinDegPerSec * Math.min(1, Math.exp(cur.logAlt) / (INTRO.dist - 1));
       }
       userLat = Math.max(-55, Math.min(50, userLat));
     } else {
@@ -423,6 +425,13 @@ export async function globe() {
       cur.dir.applyQuaternion(qStep).normalize();
     }
     // Altitude eases in log space so a zoom from orbit to street level feels even; long moves pull back first.
+    // Deep zoom only where there's detail to see: near a detail area the overview comes all the way down; elsewhere
+    // it stops once the relief has eased to close-up heights, and eases back up to there if you pan away from one.
+    if (overview) {
+      const near = DT && cur.dir.angleTo(DT.center) < DT.radius + 0.12;
+      const floorLog = Math.log(0.35 * G.detail.loadBelowAltitudeKm / EARTH_KM / (INTRO.dist - 1));
+      if (!near && pz.log < floorLog) pz.log = still ? floorLog : pz.log + (floorLog - pz.log) * (1 - Math.exp(-dt * 3));
+    }
     const narrowBoost = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 1.1 * smooth(0.6, 2.2, stop.dist - 1) : 1;
     const baseLog = Math.log((stop.dist - 1) * narrowBoost) + pz.log;
     const tLog = Math.min(baseLog + (still ? 0 : Math.min(2.6, ang * 5)), Math.max(baseLog, Math.log(2.6)));
@@ -451,12 +460,27 @@ export async function globe() {
 
     // Load the Bay Area detail when the camera is close over it.
     const stopRegion = stop === INTRO ? null : regionOf(stop);
-    const wantDetail = !!DT && !!stopRegion && alt < G.detail.loadBelowAltitudeKm / EARTH_KM;
+    // Detail shows at a stop inside a detail region, or on the overview when you've zoomed low enough and the
+    // detail area is on screen: the patch of globe in view (out to the horizon, or the edge of the view when closer)
+    // reaches it. Zooming back out or turning it away runs the load-in wave in reverse.
+    const low = alt < G.detail.loadBelowAltitudeKm / EARTH_KM;
+    let detailInView = false;
+    if (DT && overview && low) {
+      const seen = Math.min(Math.acos(1 / cur.dist), alt * Math.tan(camera.fov * D / 2) * Math.max(1, camera.aspect) * 1.3);
+      detailInView = cur.dir.angleTo(DT.center) < DT.radius + seen;
+    }
+    const wantDetail = !!DT && low && (!!stopRegion || detailInView);
     if (wantDetail && !detailOn && detailP === 0) setDetailFocus(tgtDir);
     detailOn = wantDetail;
     const wave = G.detail.waveSeconds;
     detailP = still ? (wantDetail ? 1 : 0) : Math.max(0, Math.min(1, detailP + (wantDetail ? dt / wave : -dt / (wave / 2))));
-    const m = smooth(0, 0.3, detailP);
+    // Relief eases to the close-up settings with detail, and on the overview also as you zoom below the detail
+    // altitude anywhere, so the camera can come down low without the globe-scale relief in the way. It eases rather
+    // than follows the altitude directly, so leaving the overview never makes the terrain jump.
+    const lowTarget = overview ? smooth(G.detail.loadBelowAltitudeKm / EARTH_KM, 0.35 * G.detail.loadBelowAltitudeKm / EARTH_KM, alt) : 0;
+    lowM = still ? lowTarget : lowM + (lowTarget - lowM) * (1 - Math.exp(-dt * 3));
+    if (Math.abs(lowTarget - lowM) > 1e-3) animating = true;
+    const m = Math.max(smooth(0, 0.3, detailP), lowM);
     heightUniforms.uM.value = lastM = m;
     heightUniforms.uP.value = lastDetail = detailP;
     if (DT) DT.mesh.visible = detailP > 0 && DT.count > 0;
