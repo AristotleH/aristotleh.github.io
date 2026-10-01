@@ -1,3 +1,5 @@
+/* Keep the document visible until enhancement succeeds, even if scripts fail. */
+[hidden]{display:none!important}
 :root{
   --bg:#F3F2EE; --ink:#1A1A18; --muted:#6B6A64; --line:#D9D7D0;
   --surface:#F3F2EE; --surface-solid:#F3F2EE;

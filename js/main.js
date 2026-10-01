@@ -11,24 +11,46 @@ import { startTiles } from "./tiles-client.js";
 // The globe's tiles take the longest to make, so in 3D their build starts now, alongside everything else.
 if (MODE === "3d") startTiles();
 
-let globeStarted = false, asciiStarted = false;
-function setMode(m, save) {
+let globeStarted = false, asciiStarted = false, modeRequest = 0, globeJob;
+async function setMode(m, explicit = false) {
+  const request = ++modeRequest;
   useMode(m);
-  document.documentElement.dataset.mode = m;
   document.documentElement.classList.remove("can-drag");
-  syncScrollZone();
-  for (const b of document.querySelectorAll(".modebar button")) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
-  if (save) try { localStorage.setItem("site-mode", m); } catch (e) {}
-  document.getElementById("plain").hidden = m !== "html";
-  if (m === "html") {
-    renderPlain();
-  } else if (m === "3d") {
-    if (!globeStarted) { globeStarted = true; globe(); } else window.__resume3D && window.__resume3D();
-  } else {
-    if (!asciiStarted) { asciiStarted = true; asciiGlobe(); }
-    renderBoxes();
-    window.__resumeAscii();
+  try {
+    if (m === "html") {
+      renderPlain();
+    } else if (m === "3d") {
+      if (!globeStarted) {
+        globeJob ||= globe();
+        const ready = await globeJob;
+        if (request !== modeRequest) return;
+        if (!ready) { await setMode("html", false); return; }
+        globeStarted = true;
+      }
+      window.__resume3D?.();
+    } else {
+      if (!asciiStarted) { asciiGlobe(); asciiStarted = true; }
+      renderBoxes();
+      window.__resumeAscii();
+    }
+  } catch (error) {
+    if (request !== modeRequest) return;
+    console.warn("Interactive view unavailable; keeping the HTML document.", error);
+    useMode("html");
+    m = "html";
   }
+  // Once startup falls back, keep the document in place instead of switching it
+  // unexpectedly when a slow interactive view eventually finishes initializing.
+  if (!explicit && m !== "html" && window.siteStartup?.mode === "html") {
+    await setMode("html", false);
+    return;
+  }
+  // Commit the view only after its initialization succeeds.
+  document.documentElement.dataset.mode = m;
+  document.getElementById("plain").hidden = m !== "html";
+  window.siteStartup?.finish();
+  for (const b of document.querySelectorAll(".modebar button")) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
+  syncScrollZone();
   renderHud();
   sizeHud();
   requestAnimationFrame(() => { measure(); updateActive(); });
@@ -36,4 +58,6 @@ function setMode(m, save) {
 for (const b of document.querySelectorAll(".modebar button")) b.addEventListener("click", () => setMode(b.dataset.mode, true));
 document.fonts?.ready.then(() => { if (asciiStarted) { renderBoxes(); window.__asciiNeeds(); } });
 initPage();
+for (const selector of ["#globe", "#ascii-globe", "#labels", "#stops", ".hud", ".modebar"])
+  document.querySelector(selector).hidden = false;
 setMode(MODE, false);

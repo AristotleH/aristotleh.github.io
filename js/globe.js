@@ -17,7 +17,7 @@ export async function globe() {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   } catch (e) {
     document.documentElement.classList.add("no-webgl");
-    return;
+    return false;
   }
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 
@@ -622,4 +622,5 @@ export async function globe() {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
+  return true;
 }

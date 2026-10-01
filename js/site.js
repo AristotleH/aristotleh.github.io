@@ -10,11 +10,12 @@ export const fmtMonth = m => m === "present" ? "present" : `${MONTHS[+m.slice(5,
 export const PROBLEMS = [];
 export function showProblems(errors, fatal) {
   if (!errors.length) return;
+  if (fatal) window.siteStartup?.fallback();
   console.warn("Site data problems:\n" + errors.join("\n"));
   PROBLEMS.push(...errors);
   const box = document.getElementById("data-problems");
   box.hidden = false;
-  box.innerHTML = `<strong>${fatal ? "The site data can't be shown." : "Some site data was skipped."}</strong>
+  box.innerHTML = `<strong>${fatal ? "Interactive views are unavailable. The HTML document is shown below." : "Some site data was skipped."}</strong>
     <ul>${PROBLEMS.map(e => `<li>${esc(e)}</li>`).join("")}</ul>`;
 }
 

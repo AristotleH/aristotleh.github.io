@@ -5,6 +5,7 @@ A static site served by GitHub Pages at www.aristotleh.com. It shows a globe of 
 ## Layout
 
 - `index.html`: the page's markup.
+- `scripts/render-static.mjs`: writes the plain document into `index.html` from `data/site.json`, so the profile and experience remain readable without JavaScript or if enhancement fails.
 - `css/site.css`: styles, with light and dark color tokens at the top.
 - `data/site.json`: all content (profile, stops, projects, page layout) and the globe settings. It's checked against the schema in `js/schema.js` when the page loads; problems are listed on the page.
 - `data/layers/`: the raster layers the globe is built from (land masks and elevation) as base64 text, referenced from `site.json`.
@@ -28,3 +29,11 @@ python3 -m http.server
 ```
 
 Then open http://localhost:8000.
+
+After changing `data/site.json` or the document renderer, regenerate the checked-in HTML:
+
+```
+node scripts/render-static.mjs
+```
+
+Run `node scripts/render-static.mjs --check` before publishing to check that the static content is current. Without JavaScript, the HTML document appears immediately. With JavaScript, every visit starts in 3D unless the URL explicitly requests `#html` or `#ascii`. An early script selects the view before the first paint and shows a loading state while it initializes, with a link to read the HTML immediately. Failed initialization reveals the document automatically. Slow loading alone does not switch views, and earlier choices saved in browser storage do not override the 3D default.
