@@ -23,6 +23,7 @@
   if (!known.includes(mode)) mode = "3d";
   window.siteStartup = {
     mode,
+    threeUrl: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
     finish() { root.removeAttribute("data-startup"); },
     fallback() {
       this.mode = "html";
@@ -32,6 +33,12 @@
       document.getElementById("plain")?.removeAttribute("hidden");
     }
   };
+  // Only the 3D view uses three.js. Starting there, it downloads now; it runs when the globe needs it (js/globe.js).
+  if (mode === "3d") {
+    const link = document.createElement("link");
+    link.rel = "preload"; link.as = "script"; link.href = window.siteStartup.threeUrl;
+    document.head.appendChild(link);
+  }
   if (mode !== "html") {
     root.dataset.startup = "pending";
     document.addEventListener("click", event => {
@@ -71,7 +78,6 @@
 <link rel="modulepreload" href="js/ascii-fonts.js">
 <link rel="modulepreload" href="js/ascii-globe.js">
 <link rel="modulepreload" href="js/plain.js">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 </head>
 <body>
 

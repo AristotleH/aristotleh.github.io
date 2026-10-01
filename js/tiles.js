@@ -38,7 +38,8 @@ function setup(input) {
 
 // Globe tiles: where each sits, what it is (ocean, land, ice), its elevation and whether detail replaces it, and the
 // geometry for each block of tiles. Tiles are drawn in blocks, the tiles whose centres fall in one patch of a cube
-// face split 6 x 6, so blocks beyond the horizon or outside the view can be skipped.
+// face split 4 x 4, so blocks beyond the horizon or outside the view can be skipped. Larger blocks would cull less;
+// smaller ones cost more in per-draw overhead than they save.
 export function buildGlobe(input, grid = null) {
   const S = setup(input), TR = makeTerrain(input.terrain);
   const { HEX, N, TOP_ANG, COS_REACH, detailStops, ice, gap } = S;
@@ -87,7 +88,7 @@ export function buildGlobe(input, grid = null) {
     cornerStart[COUNT] = COUNT * 4;
   }
 
-  const K = 6, lists = Array.from({ length: 6 * K * K }, () => []);
+  const K = 4, lists = Array.from({ length: 6 * K * K }, () => []);
   for (let g = 0; g < COUNT; g++) {
     const x = tileDir[g * 3], y = tileDir[g * 3 + 1], z = tileDir[g * 3 + 2];
     let fi = 0, best = -2;

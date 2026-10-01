@@ -7,21 +7,37 @@ import { zoomGestures } from "./gestures.js";
 import { makeTerrain } from "./terrain.js";
 import { startTiles, terrainInput } from "./tiles-client.js";
 
-// onReady is called once WebGL is up, before the tiles are built, so the page can show the cards meanwhile.
+// three.js is fetched early when the page starts in 3D (index.html) but only run when the globe asks for it.
+const loadThree = () => window.THREE ? Promise.resolve() : new Promise(done => {
+  const s = document.createElement("script");
+  s.src = window.siteStartup.threeUrl;
+  s.onload = s.onerror = done;
+  document.head.appendChild(s);
+});
+
+// onReady is called once WebGL is known to work, before three.js runs or the tiles are built, so the page can show
+// the cards meanwhile.
 export async function globe(onReady) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
   const canvas = document.getElementById("globe");
-  let renderer;
-  try {
-    if (!window.THREE) throw new Error("three.js missing");
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
-  } catch (e) {
+  // The context is made here, with the settings three.js would use, and handed to it once it runs.
+  const attrs = { alpha: false, antialias: true, depth: true, stencil: true, premultipliedAlpha: true,
+    preserveDrawingBuffer: false, powerPreference: "high-performance" };
+  let gl = null;
+  try { gl = canvas.getContext("webgl2", attrs) || canvas.getContext("webgl", attrs); } catch (e) {}
+  if (!gl) {
     document.documentElement.classList.add("no-webgl");
     return false;
   }
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   onReady?.();
+  // Land and elevation lookups for the pins. The tiles themselves are built off the page (tiles-client.js); the
+  // build is handed its input first, so three.js is parsed here while the worker builds.
+  const TR = makeTerrain(await terrainInput());
+  await loadThree();
+  if (!window.THREE) throw new Error("three.js didn't load");
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true, alpha: false, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(G.camera.fovDeg, 1, 0.01, 50);
@@ -41,8 +57,6 @@ export async function globe(onReady) {
   scene.add(camera);
 
   const D = Math.PI / 180;
-  // Land and elevation lookups for the pins. The tiles themselves are built off the page (tiles-client.js).
-  const TR = makeTerrain(await terrainInput());
   const { elevPoint, landFrac, regionAt } = TR, MAX_ELEV = TR.maxElev;
   const regionOf = s => regionAt(s.lat, s.lon);
   // Tile height, in globe radii. m blends from the whole-globe settings (0) to the close-up settings (1).
@@ -83,6 +97,13 @@ export async function globe(onReady) {
     return mat;
   }
   const tileMat = heightMaterial(false);
+  // Shader programs compile while the worker builds the tiles, so the first frame doesn't wait on them: the tiles',
+  // and the plain lit and unlit ones the pins and the core use.
+  {
+    const geo = new THREE.BufferGeometry();
+    const warm = [tileMat, new THREE.MeshLambertMaterial(), new THREE.MeshBasicMaterial()].map(m => new THREE.Mesh(geo, m));
+    scene.add(...warm); renderer.compile(scene, camera); scene.remove(...warm);
+  }
   // The globe's tiles, from the worker: what each tile is, and each block's geometry as plain arrays.
   const tiles = await startTiles().globe;
   const COUNT = tiles.count, { tileDir, tileKind, tileTone, tileElev, tileBay } = tiles;
@@ -349,6 +370,43 @@ export async function globe(onReady) {
   }
   let started = false;
   addEventListener("resize", resize);
+  // Resolution follows the frame rate. Over runs of back-to-back frames, if the typical gap between draws is well over
+  // the screen's refresh interval, the canvas drops toward one pixel per CSS pixel, by as much as the gap suggests
+  // (drawing time goes with the pixel count); after a long smooth run it tries a step back up, a limited number of
+  // times, so it doesn't keep flipping. A drop that doesn't speed things up (the browser is holding the frame rate
+  // down, as in a phone's low-power mode) is undone, and the resolution then stays put.
+  const fullRatio = Math.min(devicePixelRatio || 1, 2), minRatio = Math.min(1, fullRatio);
+  let ratio = fullRatio, lastDrawAt = 0, refresh = 1000 / 60, drewLastTick = false, slowRuns = 0, smoothRuns = 0, stepsUp = 2;
+  let dropped = null, settled = false;   // the last drop: the ratio and typical gap before it
+  const gaps = [];
+  function pace(gap) {
+    refresh = Math.min(refresh, Math.max(6.9, gap));   // faster screens show themselves with shorter gaps
+    gaps.push(gap);
+    if (gaps.length < 20) return;
+    gaps.sort((a, b) => a - b);
+    const typical = gaps[10];
+    gaps.length = 0;
+    if (settled) return;
+    let next = ratio;
+    if (dropped && typical > dropped.gap * 0.85) {
+      next = dropped.ratio; settled = true;
+    } else if (typical > refresh * 1.4) {
+      smoothRuns = 0;
+      if (++slowRuns >= (typical > refresh * 2 ? 1 : 2)) {
+        slowRuns = 0;
+        const fit = ratio * Math.sqrt(refresh * 1.2 / typical);
+        next = Math.max(minRatio, Math.min(ratio - 0.25, Math.floor(fit * 4) / 4));
+      }
+    } else {
+      slowRuns = 0;
+      if (typical < refresh * 1.1 && ratio < fullRatio && stepsUp > 0 && ++smoothRuns >= 30) {
+        smoothRuns = 0; stepsUp--; next = Math.min(fullRatio, ratio + 0.25);
+      }
+    }
+    dropped = next < ratio && !settled ? { ratio, gap: typical } : null;
+    // Applied just before the next draw: resizing clears the canvas, which must not reach the screen blank.
+    if (next !== ratio) { ratio = next; needsRender = true; }
+  }
   resize();
 
   // Camera: look at a point on the globe from slightly south of it, pulled back during long moves.
@@ -399,7 +457,9 @@ export async function globe(onReady) {
   let last = null;
   let sleeping3D = false;
   function frame(now) {
-    if (MODE !== "3d") { sleeping3D = true; return; }
+    if (MODE !== "3d") { sleeping3D = true; drewLastTick = false; return; }
+    const drewBefore = drewLastTick;
+    drewLastTick = false;
     const dt = last === null ? 0 : Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
     const stop = viewStop();
     const still = reduceMotion.matches;
@@ -602,7 +662,10 @@ export async function globe(onReady) {
     for (const m of markers) sig += m.scale * 3 + m.vis * 5 + m.head.rotation.z;
     for (const c of clusters.values()) sig += c.vis * 11 + c.dir.x;
     if (needsRender || !(Math.abs(sig - lastSig) <= 1e-9)) {
+      if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
       renderer.render(scene, camera);
+      if (drewBefore) pace(now - lastDrawAt);
+      drewLastTick = true; lastDrawAt = now;
       lastSig = sig;
       needsRender = false;
       if (!started) {
