@@ -116,7 +116,8 @@ export function initPage() {
   const used = [...new Set(STOPS.map(s => KINDS[s.kind].marker))];
   const legend = used.length > 1
     ? `<ul class="legend">${used.map(m => `<li>${markHtml(MARKERS[m].shape)}${esc(MARKERS[m].legend)}</li>`).join("")}</ul>` : "";
-  document.getElementById("intro").innerHTML = `<article class="card">
+  // The hint sits above the name card in both globe views; it's for pointers and fingers, so screen readers skip it.
+  document.getElementById("intro").innerHTML = `<p class="drag-hint" aria-hidden="true">Try dragging and zooming the globe!</p><article class="card">
   <h1>${esc(P.name)}</h1>
   <p class="eyebrow">${esc(P.headline)}, ${esc(P.location)}</p>
   <p class="lede">${esc(P.intro)}</p>
