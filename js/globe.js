@@ -7,7 +7,8 @@ import { zoomGestures } from "./gestures.js";
 import { makeTerrain } from "./terrain.js";
 import { startTiles, terrainInput } from "./tiles-client.js";
 
-export async function globe() {
+// onReady is called once WebGL is up, before the tiles are built, so the page can show the cards meanwhile.
+export async function globe(onReady) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
   const canvas = document.getElementById("globe");
@@ -20,6 +21,7 @@ export async function globe() {
     return false;
   }
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  onReady?.();
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(G.camera.fovDeg, 1, 0.01, 50);

@@ -11,6 +11,20 @@ import { startTiles } from "./tiles-client.js";
 // The globe's tiles take the longest to make, so in 3D their build starts now, alongside everything else.
 if (MODE === "3d") startTiles();
 
+// Resolves true once WebGL is up, or false if it can't be; the tiles go on building behind the cards. A build that
+// fails before then rejects, so the view falls back; one that fails after leaves an empty globe, so the document
+// is shown instead.
+function startGlobe() {
+  let shown = false;
+  return new Promise((ready, fail) => {
+    globe(() => { shown = true; ready(true); }).then(ok => ok || ready(false), error => {
+      if (!shown) return fail(error);
+      console.warn("The 3D globe failed to build; showing the HTML document.", error);
+      if (MODE === "3d") setMode("html");
+    });
+  });
+}
+
 let globeStarted = false, asciiStarted = false, modeRequest = 0, globeJob;
 async function setMode(m, explicit = false) {
   const request = ++modeRequest;
@@ -21,7 +35,7 @@ async function setMode(m, explicit = false) {
       renderPlain();
     } else if (m === "3d") {
       if (!globeStarted) {
-        globeJob ||= globe();
+        globeJob ||= startGlobe();
         const ready = await globeJob;
         if (request !== modeRequest) return;
         if (!ready) { await setMode("html", false); return; }
