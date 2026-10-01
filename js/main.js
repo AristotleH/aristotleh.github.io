@@ -1,7 +1,7 @@
 // Entry point: builds the page, then shows the chosen view. Each view starts the first time it's shown and sleeps
 // while another one is up.
 import { MODE, useMode } from "./mode.js";
-import { initPage, measure, renderHud, sizeHud, syncScrollZone, updateActive } from "./page.js";
+import { initPage, measure, renderHud, showInPlain, sizeHud, syncScrollZone, updateActive } from "./page.js";
 import { globe } from "./globe.js";
 import { renderBoxes } from "./ascii-text.js";
 import { asciiGlobe } from "./ascii-globe.js";
@@ -60,10 +60,12 @@ async function setMode(m, explicit = false) {
     return;
   }
   // Commit the view only after its initialization succeeds.
+  const fromGlobe = document.documentElement.dataset.mode !== "html";
   document.documentElement.dataset.mode = m;
   document.getElementById("plain").hidden = m !== "html";
   window.siteStartup?.finish();
   for (const b of document.querySelectorAll(".modebar button")) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
+  if (explicit && fromGlobe && m === "html") showInPlain();
   syncScrollZone();
   renderHud();
   sizeHud();

@@ -41,7 +41,7 @@ ${s.tags && s.tags.length ? `<p>${s.tags.map(esc).join(", ")}</p>` : ""}${proj}<
     if (b.section === "projects") {
       if (!PROJECTS.length) return "";
       const list = PROJECTS.map(pr => `<li><a href="${esc(pr.path)}">${esc(pr.title)}</a>${pr.date ? ` (${esc(fmtMonth(pr.date))})` : ""}: ${esc(pr.summary)}</li>`).join("\n");
-      return `<h2>${esc(b.label || "Projects")}</h2>\n<ul>\n${list}\n</ul>`;
+      return `<h2 id="plain-projects">${esc(b.label || "Projects")}</h2>\n<ul>\n${list}\n</ul>`;
     }
     return `<h2>${esc(b.label || "Experience and education")}</h2>\n${STOPS.map(stopHtml).join("\n<hr>\n")}`;
   }).filter(Boolean).join("\n<hr>\n");

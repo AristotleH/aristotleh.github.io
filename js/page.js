@@ -45,6 +45,14 @@ export function goTo(i) {
 }
 export const toTop = () => { heading = 0; scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" }); };
 
+// Switching from a globe view to the HTML document, whose page is a different length, lands on the article (or for
+// projects, the heading) of the stop you were on instead of at the same scroll offset. The other way needs nothing:
+// the document's view buttons are at its top.
+export function showInPlain() {
+  const s = ALL[heading ?? active], el = s === INTRO ? null : document.getElementById(`plain-${s.id}`);
+  scrollTo({ top: el ? el.getBoundingClientRect().top + scrollY - 8 : 0, behavior: "instant" });
+}
+
 // Section centres are measured once (and again when layout changes), so scrolling reads no layout.
 export let centers = [];
 export function measure() {
