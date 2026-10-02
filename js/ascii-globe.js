@@ -1,5 +1,5 @@
 // The ASCII globe: every character cell casts a ray at the sphere; what it hits picks the glyph and color.
-import { ALL, EARTH_KM, INTRO, KINDS, REGIONS, SITE, STOPS, TERRAIN, reduceMotion, shapeOf } from "./site.js";
+import { ALL, EARTH_KM, INTRO, KINDS, REGIONS, SITE, STOPS, TERRAIN, groupStops, reduceMotion, shapeOf } from "./site.js";
 import { MODE } from "./mode.js";
 import { active, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
@@ -57,6 +57,7 @@ export function asciiGlobe() {
 
   // Grid size from a measured character cell.
   let cols = 0, rows = 0, cw = 7, ch = 12, layout = "wide";
+  const wasGroup = STOPS.map(() => null);   // each stop's group last frame, for groupStops
   function measureGrid() {
     const probe = document.getElementById("ascii-probe-globe");
     // Width from ten measured characters; height from the line spacing (line-height is 1, so one line = the font size).
@@ -251,29 +252,30 @@ export function asciiGlobe() {
       }
     }
 
-    // Pins: grouped when they share a cell neighbourhood; the current stop stays on its own.
-    const pins = [];
-    for (const s of STOPS) {
-      const cell = toCell(fromLL(s.lat, s.lon));
-      if (cell) pins.push({ s, cell, on: s.id === stop.id });
-    }
-    const groups = [];
-    for (const p of pins) {
-      const g = !p.on && groups.find(g => !g.on && Math.abs(g.cell[0] - p.cell[0]) <= 3 && Math.abs(g.cell[1] - p.cell[1]) <= 1);
-      if (g) g.members.push(p); else groups.push({ cell: p.cell, on: p.on, members: [p] });
-    }
+    // Pins, grouped as in 3D (site.js): within about three characters of each other at the middle of the view, and
+    // apart again past five. A group stands at its members' mean position. The current stop stays on its own.
+    const pxPerRad = rows * ch / 2 / (alt * tanH);
     const close = alt < 0.2;
-    for (const g of groups) {
-      const [ci, cj] = g.cell;
-      if (g.members.length > 1) { put(ci - 1, cj, `(${g.members.length})`, 8, true); continue; }
-      const p = g.members[0], m = MARK[shapeOf(p.s)];
-      if (p.on) {
+    for (const idx of groupStops(pxPerRad, cw * 3.5, cw * 5, stop.id, wasGroup)) {
+      const key = idx.length > 1 ? idx.map(i => STOPS[i].id).join("+") : null;
+      const sum = [0, 0, 0];
+      for (const i of idx) {
+        wasGroup[i] = key;
+        const p = fromLL(STOPS[i].lat, STOPS[i].lon);
+        sum[0] += p[0]; sum[1] += p[1]; sum[2] += p[2];
+      }
+      const cell = toCell(norm(sum));
+      if (!cell) continue;
+      const [ci, cj] = cell;
+      if (idx.length > 1) { put(ci - 1, cj, `(${idx.length})`, 8, true); continue; }
+      const s = STOPS[idx[0]], m = MARK[shapeOf(s)];
+      if (s.id === stop.id) {
         put(ci - 1, cj, `[${m}]`, 8, true);
-        const label = " " + toAscii(p.s.title).toUpperCase() + " ";
+        const label = " " + toAscii(s.title).toUpperCase() + " ";
         if (!put(ci + 3, cj, label, 10) && !put(ci - 2 - label.length, cj, label, 10)) put(ci - Math.floor(label.length / 2), cj - 1, label, 10);
       } else {
         put(ci, cj, m, 8, true);
-        if (close) { const label = " " + toAscii(p.s.title) + " "; put(ci + 2, cj, label, 9) || put(ci - 1 - label.length, cj, label, 9); }
+        if (close) { const label = " " + toAscii(s.title) + " "; put(ci + 2, cj, label, 9) || put(ci - 1 - label.length, cj, label, 9); }
       }
     }
 

@@ -75,6 +75,28 @@ export function ordered(stops, order) {
 }
 export const STOPS = ordered(SITE.stops, SITE.order).map(s => ({ ...s, dist: 1 + altitude(s.view) }));
 export const KINDS = SITE.kinds, MARKERS = SITE.markers;
+// Pins grouped on screen, the same way in both globe views. Pins within `limit` px of each other join one group,
+// measured as if both stood at the middle of the view: their angle apart times `pxPerRad`, the screen size of one
+// radian of globe there. So turning the globe never splits or joins a group; zooming does, at the same zoom each time
+// for the same pins. Pins that shared a group last frame (`was`: a group key per stop, or null) stay together until
+// `keep` px, so a group doesn't flicker at the edge. The current stop stays on its own. Returns lists of STOPS indices.
+const STOP_DIRS = STOPS.map(s => {
+  const la = s.lat * Math.PI / 180, lo = s.lon * Math.PI / 180;
+  return [Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo)];
+});
+const STOP_ANGLES = STOP_DIRS.map(a => STOP_DIRS.map(b => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])))));
+export function groupStops(pxPerRad, limit, keep, currentId, was) {
+  const parent = STOPS.map((_, i) => i);
+  const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
+  for (let i = 0; i < STOPS.length; i++) for (let j = i + 1; j < STOPS.length; j++) {
+    if (STOPS[i].id === currentId || STOPS[j].id === currentId) continue;
+    const together = was[i] != null && was[i] === was[j];
+    if (STOP_ANGLES[i][j] * pxPerRad < (together ? keep : limit)) parent[find(i)] = find(j);
+  }
+  const groups = new Map();
+  STOPS.forEach((_, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(i); });
+  return [...groups.values()];
+}
 export const shapeOf = s => MARKERS[KINDS[s.kind].marker].shape;
 export const INTRO = { id: "intro", lat: SITE.overview.lat, lon: SITE.overview.lon,
   dist: 1 + altitude(SITE.overview.view), name: "Overview" };

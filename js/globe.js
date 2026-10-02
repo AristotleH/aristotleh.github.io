@@ -1,6 +1,6 @@
 // The 3D globe (three.js): tiles raised by elevation, pins that group when they crowd, and a camera that flies
 // between stops. It starts the first time the 3D view is shown and sleeps while another view is up.
-import { ALL, EARTH_KM, INTRO, KINDS, SITE, STOPS, reduceMotion, shapeOf } from "./site.js";
+import { ALL, EARTH_KM, INTRO, KINDS, SITE, STOPS, groupStops, reduceMotion, shapeOf } from "./site.js";
 import { MODE } from "./mode.js";
 import { active, goTo, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
@@ -590,21 +590,12 @@ export async function globe(onReady) {
       m.holder.position.copy(m.dir).multiplyScalar(m.base);
       toCam.copy(camera.position).sub(m.holder.position).normalize();
       m.facing = toCam.dot(m.dir) > 0.15;
-      m.screen = toScreen(m.holder.position);
     }
-    // Group facing pins closer than ~46 px; pins grouped last frame stay together until ~62 px, so groups don't flicker.
-    const parent = markers.map((_, i) => i);
-    const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
-    for (let i = 0; i < markers.length; i++) for (let j = i + 1; j < markers.length; j++) {
-      const A = markers[i], B = markers[j];
-      if (!A.facing || !B.facing || A.s.id === stop.id || B.s.id === stop.id) continue;
-      const limit = A.group && A.group === B.group ? 62 : 46;
-      if (Math.hypot(A.screen[0] - B.screen[0], A.screen[1] - B.screen[1]) < limit) parent[find(i)] = find(j);
-    }
-    const groups = new Map();
-    markers.forEach((m, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(m); });
+    // Group pins closer than ~46 px at the middle of the view; grouped pins stay together until ~62 px (site.js).
+    const pxPerRad = Hh / 2 / (alt * Math.tan(camera.fov * D / 2));
+    const groups = groupStops(pxPerRad, 46, 62, stop.id, markers.map(m => m.group)).map(g => g.map(i => markers[i]));
     const live = new Set();
-    for (const members of groups.values()) {
+    for (const members of groups) {
       const key = members.length > 1 ? members.map(m => m.s.id).join("+") : null;
       for (const m of members) m.group = key;
       if (!key) continue;
