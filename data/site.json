@@ -1,0 +1,282 @@
+{
+  "profile": {
+    "name": "Aristotle Henderson",
+    "headline": "Software engineer",
+    "location": "San Francisco, CA",
+    "intro": "I'm part of the Data Model team for the Roblox engine. Learn more about me below.",
+    "links": [
+      {
+        "label": "LinkedIn",
+        "url": "https://www.linkedin.com/in/aristotleh"
+      },
+      {
+        "label": "GitHub",
+        "url": "https://github.com/aristotleh"
+      }
+    ]
+  },
+  "overview": {
+    "lat": 30,
+    "lon": -100,
+    "view": "globe"
+  },
+  "views": {
+    "globe": {
+      "altitudeKm": 17200
+    },
+    "region": {
+      "altitudeKm": 5200
+    },
+    "city": {
+      "altitudeKm": 140
+    },
+    "street": {
+      "altitudeKm": 76
+    }
+  },
+  "markers": {
+    "cube": {
+      "shape": "cube",
+      "legend": "School or work"
+    },
+    "diamond": {
+      "shape": "diamond",
+      "legend": "Photo"
+    }
+  },
+  "kinds": {
+    "work": {
+      "marker": "cube",
+      "card": "entry",
+      "onRoute": true
+    },
+    "school": {
+      "marker": "cube",
+      "card": "entry",
+      "onRoute": true
+    },
+    "photo": {
+      "marker": "diamond",
+      "card": "photo",
+      "onRoute": false
+    }
+  },
+  "order": "newest-first",
+  "layout": [
+    {
+      "section": "projects",
+      "label": "Projects"
+    },
+    {
+      "section": "experience",
+      "label": "Experience and education"
+    }
+  ],
+  "projects": [],
+  "stops": [
+    {
+      "id": "carmel",
+      "kind": "school",
+      "title": "Carmel High School",
+      "place": "Carmel, California",
+      "lat": 36.548,
+      "lon": -121.905,
+      "view": "street",
+      "start": "2015-08",
+      "end": "2019-06",
+      "role": null,
+      "body": "I graduated as a valedictorian with a 4.0 GPA after 12 AP courses. I was Head of Autonomous for FIRST Robotics Team 2035.",
+      "tags": [
+        "FIRST Robotics"
+      ]
+    },
+    {
+      "id": "nps",
+      "kind": "work",
+      "title": "Naval Postgraduate School",
+      "place": "Monterey, California",
+      "lat": 36.5967,
+      "lon": -121.8743,
+      "view": "street",
+      "start": "2018-06",
+      "end": "2018-07",
+      "employment": "Internship",
+      "workplace": "On-site",
+      "role": "Research Intern",
+      "body": "I built mobile apps for Global ECCO, which uses strategy games to connect defense experts. I guided the Android app in Java with Firebase, then led an iOS version in Swift with the same backend and features. My technical reports fed into material in our OSD leadership sponsor's 2018 Report to Congress.",
+      "tags": [
+        "Java",
+        "Swift",
+        "Firebase",
+        "Android",
+        "iOS"
+      ]
+    },
+    {
+      "id": "ucla",
+      "kind": "school",
+      "title": "UCLA",
+      "place": "Los Angeles, California",
+      "lat": 34.0689,
+      "lon": -118.4452,
+      "view": "region",
+      "start": "2019-09",
+      "end": "2023-06",
+      "role": "B.S., Computer Science",
+      "body": "I graduated summa cum laude from the Samueli School of Engineering with a 3.96 GPA. I was an Upsilon Pi Epsilon officer and a Tau Beta Pi member, did research at the Scalable Analytics Institute, and led software development for DevX's BruinBot delivery robot.",
+      "tags": [
+        "UPE",
+        "Tau Beta Pi",
+        "DevX"
+      ]
+    },
+    {
+      "id": "marvell",
+      "kind": "work",
+      "title": "Marvell Technology",
+      "place": "Burlington, Vermont",
+      "lat": 44.4759,
+      "lon": -73.2121,
+      "view": "region",
+      "start": "2021-06",
+      "end": "2021-09",
+      "employment": "Internship",
+      "workplace": "Remote",
+      "role": "Software Engineer Intern",
+      "body": "I wrote software to optimize and analyze components in ASIC AI accelerators and 5G networking products. I used Python, R, and C# to analyze large semiconductor data sets, automate design decisions, and extend statistics-driven optimization tools.",
+      "tags": [
+        "Python",
+        "R",
+        "C#"
+      ]
+    },
+    {
+      "id": "meta",
+      "kind": "work",
+      "title": "Meta",
+      "place": "Menlo Park, California",
+      "lat": 37.4847,
+      "lon": -122.1477,
+      "view": "city",
+      "start": "2022-06",
+      "end": "2022-09",
+      "employment": "Internship",
+      "workplace": "Hybrid",
+      "role": "Software Engineer Intern",
+      "body": "On the Remote Presence team, I built full-stack internal tooling for RTC infrastructure with Hack, GraphQL, and React. It visualizes and debugs calling data across arbitrary data sets and sources, and grew past its first scope to support wider engineering workflows. I also owned its product design, from Figma prototypes to weekly planning.",
+      "tags": [
+        "Hack",
+        "GraphQL",
+        "React",
+        "Figma"
+      ]
+    },
+    {
+      "id": "roblox",
+      "kind": "work",
+      "title": "Roblox",
+      "place": "San Mateo, California",
+      "lat": 37.5585,
+      "lon": -122.2855,
+      "view": "city",
+      "start": "2023-07",
+      "end": "present",
+      "employment": "Full-time",
+      "workplace": "Hybrid",
+      "role": "Software Engineer, Engine",
+      "body": "I develop and maintain the systems that give game developers access to the engine's functionality. My focus is Python-based code generation for API reflection, low-level C++ optimization, creator tooling, subsystem profiling, and mentoring early-career engineers.",
+      "tags": [
+        "C++",
+        "Python",
+        "Codegen",
+        "Profiling"
+      ]
+    }
+  ],
+  "detailRegions": [
+    {
+      "id": "bay-area",
+      "name": "Bay Area",
+      "bounds": {
+        "south": 35.3,
+        "north": 39.3,
+        "west": -124.3,
+        "east": -120.3
+      },
+      "land": {
+        "columns": 320,
+        "rows": 320,
+        "encoding": "rle-varint-base64",
+        "source": "Natural Earth 1:10m land",
+        "src": "layers/bay-area-land.txt"
+      },
+      "elevation": {
+        "columns": 40,
+        "rows": 40,
+        "encoding": "uint8-deflate-base64",
+        "metersPerUnit": 25,
+        "source": "NASA Visible Earth topography, via the three-globe package (earth-topology.png)",
+        "src": "layers/bay-area-elevation.txt"
+      }
+    }
+  ],
+  "globe": {
+    "routeArcs": false,
+    "grid": {
+      "shape": "hex",
+      "tilesPerFaceEdge": 96,
+      "hexSubdivisions": 64,
+      "tileGap": 0
+    },
+    "terrain": {
+      "verticalExaggeration": {
+        "globe": 60,
+        "closeUp": 8
+      },
+      "landBaseKm": {
+        "globe": 9,
+        "closeUp": 0.6
+      },
+      "oceanThicknessKm": {
+        "globe": 19,
+        "closeUp": 0.5
+      },
+      "iceLatitude": {
+        "north": 68,
+        "south": -62
+      }
+    },
+    "detail": {
+      "sizeToDistance": 0.18,
+      "loadBelowAltitudeKm": 3800,
+      "waveSeconds": 1.4
+    },
+    "camera": {
+      "fovDeg": 35,
+      "closeTiltDeg": 29,
+      "dragSpeed": 0.6,
+      "idleSpinDegPerSec": 4,
+      "overviewZoom": {
+        "in": 150,
+        "out": 1.5
+      }
+    },
+    "layers": {
+      "land": {
+        "columns": 720,
+        "rows": 360,
+        "encoding": "rle-varint-base64",
+        "source": "Natural Earth 1:50m land",
+        "src": "layers/globe-land.txt"
+      },
+      "elevation": {
+        "columns": 1024,
+        "rows": 512,
+        "encoding": "uint8-deflate-base64",
+        "metersPerUnit": 25,
+        "source": "NASA Visible Earth topography, via the three-globe package (earth-topology.png)",
+        "src": "layers/globe-elevation.txt"
+      }
+    }
+  }
+}

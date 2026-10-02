@@ -1,0 +1,186 @@
+/* Keep the document visible until enhancement succeeds, even if scripts fail. */
+[hidden]{display:none!important}
+:root{
+  --bg:#F3F2EE; --ink:#1A1A18; --muted:#6B6A64; --line:#D9D7D0;
+  --surface:#F3F2EE; --surface-solid:#F3F2EE;
+  --accent:#1A1A18; --accent-ink:#F3F2EE;
+  /* Globe: ocean, and land tinted by height (lowland, upland, mountain, then snow on the highest peaks). */
+  --g-ocean:#A9C3CC; --g-ocean2:#9CB8C3; --g-core:#7E97A1;
+  --g-land:#86A56E; --g-land2:#B3AE78; --g-land3:#A88E6A; --g-snow:#F4F4F0;
+  --g-pin:#1A1A18; --g-trail:#6B6A64; --g-atmo:#9CC3D6;
+  --a-ocean:#6F93A6; --a-land:#255A22; --a-high:#6B4E0E; --a-ice:#46636F;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#101112; --ink:#ECEBE6; --muted:#9B9A94; --line:#2B2C2D;
+    --surface:#101112; --surface-solid:#101112;
+    --accent:#ECEBE6; --accent-ink:#101112;
+    --g-ocean:#152A38; --g-ocean2:#1A3242; --g-core:#070F14;
+    --g-land:#3F6448; --g-land2:#6D6B47; --g-land3:#7C6649; --g-snow:#CDD3D1;
+    --g-pin:#ECEBE6; --g-trail:#9B9A94; --g-atmo:#2F6E94;
+  --a-ocean:#4C7F9C; --a-land:#9BDA82; --a-high:#EDCF86; --a-ice:#E2ECEE;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#101112; --ink:#ECEBE6; --muted:#9B9A94; --line:#2B2C2D;
+  --surface:#101112; --surface-solid:#101112;
+  --accent:#ECEBE6; --accent-ink:#101112;
+  --g-ocean:#152A38; --g-ocean2:#1A3242; --g-core:#070F14;
+  --g-land:#3F6448; --g-land2:#6D6B47; --g-land3:#7C6649; --g-snow:#CDD3D1;
+  --g-pin:#ECEBE6; --g-trail:#9B9A94; --g-atmo:#2F6E94;
+  --a-ocean:#4C7F9C; --a-land:#9BDA82; --a-high:#EDCF86; --a-ice:#E2ECEE;
+}
+
+html{scroll-behavior:auto}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+
+#globe{position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;display:block;pointer-events:none;z-index:0}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.label{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:500 12px/1 var(--sans);
+  background:var(--ink);color:var(--bg);padding:5px 7px;border-radius:4px;white-space:nowrap;opacity:0;transition:opacity .25s}
+.label.on{opacity:1}
+.label.dim{background:var(--surface-solid);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.label.dim::after{background:var(--surface-solid)}
+.label::after{content:"";position:absolute;left:50%;bottom:-5px;width:8px;height:8px;background:var(--ink);transform:translateX(-50%) rotate(45deg)}
+
+
+main{position:relative;z-index:2;padding-inline:16px;pointer-events:none}
+.card{pointer-events:auto}
+/* On the overview, a touch on the globe pans it in any direction; only the name card scrolls the page. */
+.can-drag #globe{pointer-events:auto;cursor:grab;touch-action:none}
+.can-drag.dragging #globe{cursor:grabbing}
+/* Below the name card on the overview, touches and the wheel scroll the page instead of moving the globe. */
+#scroll-zone{position:fixed;left:0;right:0;bottom:0;z-index:1;display:none}
+/* Controls, pin labels and drawing aren't content: a drag or long-press shouldn't highlight them or copy them.
+   In the ASCII boxes, borders, padding, markers and banner art are marked .a-deco so a copy gets only the text. */
+.modebar,.hud,#labels,#globe,#scroll-zone,.drag-hint,.a-deco,.a-mk{-webkit-user-select:none;user-select:none}
+.a-plain{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#globe,#ascii-globe,#scroll-zone,.hud,.modebar{-webkit-touch-callout:none}
+.stop{min-height:100vh;display:flex;align-items:center;padding-block:10vh}
+.stop.side-right{justify-content:flex-end}
+.stop.intro{min-height:92vh}
+
+.card{width:min(390px,100%);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:22px;display:flex;flex-direction:column;gap:10px}
+@media (min-width:1100px){.stop .card,.drag-hint{margin-inline:clamp(0px,4vw,80px)}}
+/* The overview stacks a hint above the name card. Drags on the hint go through to the globe. */
+.stop.intro{flex-direction:column;justify-content:center;align-items:flex-start}
+.drag-hint{margin-top:0;margin-bottom:8px;padding:5px 10px;background:var(--bg);color:var(--muted);border:1px solid var(--line);border-radius:8px;font-size:.85rem;line-height:1.3}
+[data-mode="ascii"] .drag-hint{border-color:var(--ink);border-radius:0;color:var(--ink);font:400 12.5px/1.45 var(--mono);margin-inline:0}
+
+.eyebrow{margin:-4px 0 0;font-size:.95rem;color:var(--muted)}
+.mark{flex:none;width:10px;height:10px;background:var(--accent);box-shadow:inset 0 0 0 1px var(--accent-ink)}
+.mark.diamond{background:var(--ink);transform:rotate(45deg);box-shadow:none;width:9px;height:9px}
+h1,h2{font-weight:650;margin:0;text-wrap:balance;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.05}
+h2{font-size:1.4rem;line-height:1.2}
+.role{margin:0;font-weight:600}
+.projects{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.projects>li{display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
+.projects>li:first-child{padding-top:0;border-top:0}
+.proj-link{display:flex;justify-content:space-between;align-items:baseline;gap:12px;color:var(--ink);text-decoration:none}
+.proj-title{font-weight:600;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.proj-link:hover .proj-title{text-decoration-thickness:2px}
+.proj-date{flex:none;font-size:.9rem;color:var(--muted)}
+.stop-projects{margin:0;font-size:.95rem}
+.stop-projects a{color:var(--ink);text-underline-offset:3px}
+.body{margin:0;color:var(--ink)}
+.lede{margin:0;font-size:1.06rem}
+.tags{margin:0;font-size:.9rem;color:var(--muted)}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0;padding:0;list-style:none;font-size:.9rem;color:var(--muted)}
+.legend li{display:flex;align-items:center;gap:8px}
+.links{display:flex;gap:18px;flex-wrap:wrap}
+.links a{color:var(--ink);text-underline-offset:3px;text-decoration-thickness:1px}
+.links a:hover{text-decoration-thickness:2px}
+.hint{font-size:.9rem;color:var(--muted);margin:0}
+
+.photo{margin:0;display:flex;flex-direction:column;gap:8px}
+.photo img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px}
+.photo-slot{aspect-ratio:4/3;max-width:100%;border:1px dashed var(--muted);border-radius:10px;display:grid;place-items:center;text-align:center;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:24px 24px;
+  font:500 12px/1.5 var(--mono);color:var(--muted);padding:16px}
+.photo-slot span{background:var(--surface-solid);padding:6px 8px}
+
+
+.hud{position:fixed;z-index:3;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);
+  display:flex;align-items:stretch;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;font:500 14px/1 var(--sans);overflow:hidden;max-width:calc(100vw - 32px)}
+.hud button{all:unset;cursor:pointer;min-width:48px;min-height:44px;display:grid;place-items:center;font-size:17px;-webkit-tap-highlight-color:transparent}
+.hud button:active{background:rgba(127,127,127,.35)}
+.hud button:hover{background:rgba(127,127,127,.25)}
+.hud button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.hud-mid{display:flex;align-items:center;padding:8px 6px;min-width:0;line-height:1.5}
+.hud-mid{cursor:pointer}
+.hud-mid:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.hud-mid{flex:1;justify-content:center}
+.hud-mid .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+.fallback{display:none}
+
+/* View switch, top left. */
+.modebar{position:fixed;z-index:4;top:calc(env(safe-area-inset-top,0px) + 14px);left:16px;display:flex;padding:0 4px;
+  background:var(--bg);border:1px solid var(--line);border-radius:8px}
+.modebar button{all:unset;cursor:pointer;font:500 13px/1 var(--sans);padding:10px 8px;color:var(--muted);
+  min-height:18px;-webkit-tap-highlight-color:transparent}
+.modebar button[aria-pressed="true"]{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+.modebar button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* HTML mode: a basic document. Browser defaults (system colors, default serif, native buttons), nothing else. */
+#plain{max-width:42em;margin:0 auto;padding:8px 16px 48px;font:initial;color:CanvasText}
+#plain *{all:revert}
+[data-mode="html"] body{background:Canvas;color:CanvasText;font:initial}
+[data-mode="html"] #globe,[data-mode="html"] #ascii-globe,[data-mode="html"] #labels,[data-mode="html"] #stops,
+[data-mode="html"] .hud{display:none}
+[data-mode="html"] .modebar{all:revert;display:block;max-width:42em;margin:0 auto;padding:12px 16px 0}
+[data-mode="html"] .modebar button{all:revert;margin-right:4px}
+[data-mode="html"] .modebar button[aria-pressed="true"]{font-weight:bold}
+
+/* ASCII mode: text only. The canvas and HTML cards give way to the text globe and boxes. */
+#ascii-globe{position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;margin:0;z-index:0;overflow:hidden;display:none;
+  font:400 clamp(10.5px, 1.05vw, 13px)/1 var(--mono);color:var(--muted);pointer-events:none;user-select:none;-webkit-user-select:none}
+#ascii-globe.can-drag{pointer-events:auto;cursor:grab;touch-action:none}
+.ascii-probes{position:absolute;visibility:hidden;pointer-events:none;left:-9999px;top:0}
+#ascii-probe-globe{font:400 clamp(10.5px, 1.05vw, 13px)/1 var(--mono);white-space:pre}
+#ascii-probe-card,.abox{font:400 12.5px/1.45 var(--mono)}
+#ascii-probe-card{white-space:pre}
+.abox{display:none;margin:0;white-space:pre;color:var(--ink);background:var(--bg);pointer-events:auto;max-width:100%;overflow:hidden}
+.abox .ln{display:block;white-space:pre}
+.abox .ln.tight{line-height:1.08}
+.abox a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+.abox a:hover{background:var(--ink);color:var(--bg);text-decoration:none}
+/* Never bold: a synthesized or wider bold face breaks the columns. 500 falls back to regular where it's missing. */
+.a-dim{color:var(--muted)} .a-ink{color:var(--ink);font-weight:500}
+/* Land is dense and heavy; ocean, atmosphere and stars stay faint so the continents stand off the page. */
+.a-o{color:var(--a-ocean);opacity:.7} .a-rim{color:var(--a-ocean);font-weight:500} .a-l{color:var(--a-land);font-weight:500} .a-h{color:var(--a-high);font-weight:500} .a-i{color:var(--a-ice);font-weight:500}
+.a-atm{color:var(--a-ocean);opacity:.45} .a-star{color:var(--muted);opacity:.45} .a-rt{color:var(--accent)}
+.a-mk{color:var(--accent);font-weight:500} .a-lb{color:var(--ink)} .a-lbo{background:var(--ink);color:var(--bg);font-weight:500}
+[data-mode="ascii"] #globe,[data-mode="ascii"] #labels,[data-mode="ascii"] .card{display:none}
+[data-mode="ascii"] #ascii-globe{display:block}
+[data-mode="ascii"] .abox{display:block}
+[data-mode="ascii"] .stop.active .abox{color:var(--ink)}
+[data-mode="ascii"] .hud,[data-mode="ascii"] .modebar{border-radius:0;font-family:var(--mono)}
+[data-mode="ascii"] .modebar button{font-family:var(--mono)}
+[data-mode="ascii"] .hud{border:1px solid var(--ink)}
+.problems{position:fixed;z-index:4;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 64px);max-width:640px;margin-inline:auto;
+  background:var(--bg);color:var(--ink);border:1px solid var(--ink);border-radius:8px;padding:12px 16px;font-size:.9rem;line-height:1.5}
+.problems ul{margin:6px 0 0;padding-left:18px}
+.no-webgl .fallback{display:block}
+
+@media (max-width:1099px){
+  .stop, .stop.side-right{justify-content:flex-start}
+}
+@media (max-width:699px){
+  .stop{align-items:flex-end;min-height:108vh;padding-block:0 calc(env(safe-area-inset-bottom,0px) + 76px)}
+  /* Sized to the visible screen (svh), not the space behind the browser's toolbars, so the card starts higher. */
+  .stop.intro{min-height:84vh;min-height:84svh;justify-content:flex-end}
+  .card{width:100%}
+  .stop.intro .card{width:auto;align-self:stretch}   /* in the overview's column, 100% plus padding would overflow */
+  .hud{bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:16px;right:16px;transform:none;max-width:none}
+  .hud-mid{flex:1;justify-content:center}
+}
+@media (prefers-reduced-motion: reduce){
+  .label{transition:none}
+}
