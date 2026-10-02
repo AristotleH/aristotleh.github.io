@@ -525,6 +525,9 @@ export async function globe(onReady) {
     camera.near = Math.max(0.00004, alt * 0.05);
     camera.far = cur.dist + 2;
     camera.updateProjectionMatrix();
+    // three.js refreshes the camera's world matrices only when it draws. Pins and labels are placed on screen, and the
+    // redraw check reads the matrix, before that, so refresh them now or they follow the previous frame's camera.
+    camera.updateMatrixWorld();
 
     // Load the Bay Area detail when the camera is close over it.
     const stopRegion = stop === INTRO ? null : regionOf(stop);
@@ -643,7 +646,7 @@ export async function globe(onReady) {
       m.holder.visible = m.vis > 0.01;
       // The label sits just above the head as drawn: the head's centre on screen, less the on-screen radius of a ball
       // around the cube at its current size (a corner reaches sqrt(3) x the half-width from the centre).
-      m.top.copy(m.dir).multiplyScalar(m.base + m.H * ms);
+      m.top.copy(m.dir).multiplyScalar(m.base + m.H * ms * m.vis);
       const [x, y] = toScreen(m.top);
       const rPx = 0.009 * Math.sqrt(3) * m.scale * ms * m.vis / (camera.position.distanceTo(m.top) * Math.tan(camera.fov * Math.PI / 360)) * Hh / 2;
       const tf = `translate(${x.toFixed(1)}px, ${(y - rPx - 6).toFixed(1)}px) translate(-50%, -100%)`;
