@@ -1,6 +1,7 @@
 // The page: one section per step with its card (and an empty box the ASCII view fills), scroll tracking, and the
 // stop bar.
-import { ALL, INTRO, KINDS, MARKERS, P, PROJECTS, PROJECTS_STEP, SEQ, STOPS, esc, fmtMonth, eyebrowOf, projectsAt, reduceMotion } from "./site.js";
+import { ALL, INTRO, KINDS, MARKERS, P, PROJECTS, PROJECTS_STEP, SEQ, STOPS, esc, fmtMonth, eyebrowOf, profileLinks, projectsAt,
+  reduceMotion, sectionId } from "./site.js";
 import { MODE } from "./mode.js";
 import { toAscii } from "./ascii-text.js";
 
@@ -82,7 +83,6 @@ export function updateActive() {
     sections[active].classList.add("active");
     renderHud();
     updateActive.done = true;
-    if (window.onStopChange) window.onStopChange(active);
   }
   if (heading === active) heading = null;
 }
@@ -111,7 +111,7 @@ export function sizeHud() {
 // Fills in the profile, the intro card and one section per step, and starts tracking the scroll.
 export function initPage() {
   document.title = P.name;
-  const linksHtml = (P.links || []).map(l => `<a href="${esc(l.url)}">${esc(l.label)}</a>`).join("");
+  const linksHtml = profileLinks(P).map(l => `<a href="${esc(l.url)}">${esc(l.label)}</a>`).join("");
   // A legend only when there's more than one kind of pin to tell apart.
   const used = [...new Set(STOPS.map(s => KINDS[s.kind].marker))];
   const legend = used.length > 1
@@ -123,17 +123,16 @@ export function initPage() {
   <p class="lede">${esc(P.intro)}</p>
   ${legend}
   ${linksHtml ? `<div class="links">${linksHtml}</div>` : ""}
-  <p class="fallback hint">This browser can't draw the 3D globe, so the places are listed as text below.</p>
 </article><pre class="abox"></pre>`;
   const main = document.getElementById("stops");
   SEQ.forEach((s, i) => {
     const sec = document.createElement("section");
     sec.className = "stop " + (i % 2 ? "side-right" : "side-left");
-    sec.id = s.id;
+    sec.id = sectionId(s);
     sec.innerHTML = cardOf(s) + `<pre class="abox"></pre>`;
     main.appendChild(sec);
   });
-  sections = ALL.map(s => document.getElementById(s.id));
+  sections = ALL.map(s => document.getElementById(sectionId(s)));
 
   document.getElementById("prev").onclick = () => goTo(active - 1);
   document.getElementById("next").onclick = () => goTo(active + 1);

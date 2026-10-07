@@ -11,13 +11,16 @@ import { startTiles } from "./tiles-client.js";
 // The globe's tiles take the longest to make, so in 3D their build starts now, alongside everything else.
 if (MODE === "3d") startTiles();
 
+// The globes, once started: each has resume() to wake it after another view was up.
+let globe3D = null, ascii = null;
+
 // Resolves true once WebGL is up, or false if it can't be; the tiles go on building behind the cards. A build that
 // fails before then rejects, so the view falls back; one that fails after leaves an empty globe, so the document
 // is shown instead.
 function startGlobe() {
   let shown = false;
   return new Promise((ready, fail) => {
-    globe(() => { shown = true; ready(true); }).then(ok => ok || ready(false), error => {
+    globe(() => { shown = true; ready(true); }).then(g => { globe3D = g || null; if (!g) ready(false); }, error => {
       if (!shown) return fail(error);
       console.warn("The 3D globe failed to build; showing the HTML document.", error);
       if (MODE === "3d") setMode("html");
@@ -25,7 +28,7 @@ function startGlobe() {
   });
 }
 
-let globeStarted = false, asciiStarted = false, modeRequest = 0, globeJob;
+let globeStarted = false, modeRequest = 0, globeJob;
 async function setMode(m, explicit = false) {
   const request = ++modeRequest;
   useMode(m);
@@ -41,11 +44,11 @@ async function setMode(m, explicit = false) {
         if (!ready) { await setMode("html", false); return; }
         globeStarted = true;
       }
-      window.__resume3D?.();
+      globe3D?.resume();
     } else {
-      if (!asciiStarted) { asciiGlobe(); asciiStarted = true; }
+      ascii ||= asciiGlobe();
       renderBoxes();
-      window.__resumeAscii();
+      ascii.resume();
     }
   } catch (error) {
     if (request !== modeRequest) return;
@@ -72,7 +75,7 @@ async function setMode(m, explicit = false) {
   requestAnimationFrame(() => { measure(); updateActive(); });
 }
 for (const b of document.querySelectorAll(".modebar button")) b.addEventListener("click", () => setMode(b.dataset.mode, true));
-document.fonts?.ready.then(() => { if (asciiStarted) { renderBoxes(); window.__asciiNeeds(); } });
+document.fonts?.ready.then(() => { if (ascii) { renderBoxes(); ascii.remeasure(); } });
 initPage();
 for (const selector of ["#globe", "#ascii-globe", "#labels", "#stops", ".hud", ".modebar"])
   document.querySelector(selector).hidden = false;

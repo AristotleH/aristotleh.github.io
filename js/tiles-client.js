@@ -1,6 +1,6 @@
 // Starts the tile build (tiles.js) in a worker, as early as possible, and hands the globe its results: `globe`
 // resolves with the tiles and block geometry, `detail` with the close-up detail. Where module workers aren't
-// supported the same code runs on the page instead.
+// supported the same code runs on the page instead. A build that fails on the page rejects both.
 import { SITE, STOPS, REGIONS, TERRAIN } from "./site.js";
 
 const D = Math.PI / 180;
@@ -40,16 +40,19 @@ function tileInput(terrain) {
 let job = null;
 export function startTiles() {
   if (job) return job;
-  let toGlobe, toDetail, onPage = false;
-  job = { globe: new Promise(r => toGlobe = r), detail: new Promise(r => toDetail = r) };
+  let toGlobe, toDetail, failGlobe, failDetail, onPage = false;
+  job = { globe: new Promise((r, f) => { toGlobe = r; failGlobe = f; }), detail: new Promise((r, f) => { toDetail = r; failDetail = f; }) };
   const here = async () => {
     if (onPage) return;
     onPage = true;
-    const { buildGlobe, buildDetail } = await import("./tiles.js"), input = tileInput(await terrainInput());
-    const G = buildGlobe(input);
-    toGlobe(G);
-    if (input.detailStops.length) setTimeout(() => toDetail(buildDetail(input, G)), 0);
+    try {
+      const { buildGlobe, buildDetail } = await import("./tiles.js"), input = tileInput(await terrainInput());
+      const G = buildGlobe(input);
+      toGlobe(G);
+      if (input.detailStops.length) setTimeout(() => { try { toDetail(buildDetail(input, G)); } catch (e) { failDetail(e); } }, 0);
+    } catch (e) { failGlobe(e); failDetail(e); }
   };
+  job.detail.catch(() => {});   // the globe reports it once it listens; until then it isn't an unhandled rejection
   try {
     const w = new Worker(new URL("./tiles-worker.js", import.meta.url), { type: "module" });
     w.onmessage = ({ data }) => data.type === "globe" ? toGlobe(data.G) : toDetail(data.DT);

@@ -49,8 +49,8 @@ export function makeTerrain(input) {
   // Share of land in a box around a point: from a region's fine mask when the box is inside it, else the globe mask.
   function coarseFrac(lat, lon, halfDeg) {
     const hc = halfDeg / Math.cos(lat * D);
-    const r0 = Math.floor((90 - lat - halfDeg) * 2), r1 = Math.max(r0, Math.floor((90 - lat + halfDeg) * 2 - 1e-9));
-    const c0 = Math.floor((lon + 180 - hc) * 2), c1 = Math.max(c0, Math.floor((lon + 180 + hc) * 2 - 1e-9));
+    const r0 = Math.floor((90 - lat - halfDeg) * PER_DEG), r1 = Math.max(r0, Math.floor((90 - lat + halfDeg) * PER_DEG - 1e-9));
+    const c0 = Math.floor((lon + 180 - hc) * PER_DEG), c1 = Math.max(c0, Math.floor((lon + 180 + hc) * PER_DEG - 1e-9));
     let sum = 0, n = 0;
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       sum += mask[Math.min(MH - 1, Math.max(0, r)) * MW + ((c % MW) + MW) % MW]; n++;

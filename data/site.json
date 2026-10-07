@@ -13,7 +13,12 @@
         "label": "GitHub",
         "url": "https://github.com/aristotleh"
       }
-    ]
+    ],
+    "resume": {
+      "label": "Resume",
+      "path": "/assets/docs/resume/Aristotle_Henderson_Resume.pdf",
+      "show": false
+    }
   },
   "overview": {
     "lat": 30,

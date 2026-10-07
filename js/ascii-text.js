@@ -1,6 +1,7 @@
 // The ASCII view's text: the same site drawn only with printable ASCII. Cards are boxes of + - |, the name is a
 // FIGlet banner, and photos become character art. The globe itself is in ascii-globe.js.
-import { KINDS, MARKERS, P, PROJECTS, PROJECTS_STEP, STOPS, esc, eyebrowOf, fmtMonth, projectsAt, shapeOf } from "./site.js";
+import { KINDS, MARKERS, P, PROJECTS, PROJECTS_STEP, STOPS, esc, eyebrowOf, fmtMonth, profileLinks, projectsAt, sectionId, shapeOf }
+  from "./site.js";
 import { FIGLET } from "./ascii-fonts.js";
 
 // Printable ASCII only: common typography mapped, accents dropped, anything else becomes "?".
@@ -112,13 +113,16 @@ export function boxHtml(lines, inner) {
       const t = escHtml(s.t);
       const plain = s.plain ? `<span class="a-plain">${escHtml(s.plain)}</span>` : "";
       if (s.href) return plain + `<a href="${esc(s.href)}">${t}</a>`;
-      return plain + (s.cls ? `<span class="${s.cls}">${t}</span>` : t);
+      // Decoration is hidden from screen readers too, so they read only the text.
+      const hide = s.cls && s.cls.split(" ").includes("a-deco") ? ' aria-hidden="true"' : "";
+      return plain + (s.cls ? `<span class="${s.cls}"${hide}>${t}</span>` : t);
     }).join("");
     const pad = " ".repeat(Math.max(0, width - len));
-    const deco = t => `<span class="a-deco">${t}</span>`;
+    const deco = t => `<span class="a-deco" aria-hidden="true">${t}</span>`;
     return `<span class="ln${tight ? " tight" : ""}">${wide ? deco("|") + html + deco(pad + "|") : deco("| ") + html + deco(pad + " |")}</span>`;
   });
-  return [`<span class="ln a-deco">${edge}</span>`, ...body, `<span class="ln a-deco">${edge}</span>`].join("");
+  const rule = `<span class="ln a-deco" aria-hidden="true">${edge}</span>`;
+  return [rule, ...body, rule].join("");
 }
 export const MARK = { cube: "@", diamond: "o" };
 
@@ -200,10 +204,11 @@ export function introBox(inner) {
     });
     lines.push("", legend);
   }
-  if (P.links && P.links.length) {
+  const links = profileLinks(P);
+  if (links.length) {
     lines.push("");
     const segs = [];
-    P.links.forEach((l, i) => { if (i) segs.push({ t: "  " }); segs.push({ t: "[ " }, { t: toAscii(l.label), href: l.url }, { t: " ]" }); });
+    links.forEach((l, i) => { if (i) segs.push({ t: "  " }); segs.push({ t: "[ " }, { t: toAscii(l.label), href: l.url }, { t: " ]" }); });
     lines.push(segs);
   }
   return boxHtml(lines, inner);
@@ -268,9 +273,9 @@ export const photoArtCache = new Map();
 export function renderBoxes() {
   measureBox();
   document.querySelector("#intro .abox").innerHTML = introBox(boxInner);
-  if (PROJECTS_STEP) document.querySelector("#projects .abox").innerHTML = projectsBox(PROJECTS_STEP, boxInner);
+  if (PROJECTS_STEP) document.getElementById(sectionId(PROJECTS_STEP)).querySelector(".abox").innerHTML = projectsBox(PROJECTS_STEP, boxInner);
   for (const s of STOPS) {
-    const pre = document.querySelector(`#${s.id} .abox`);
+    const pre = document.getElementById(sectionId(s)).querySelector(".abox");
     const key = s.photo && s.photo.src ? `${s.photo.src}|${boxInner}` : null;
     pre.innerHTML = stopBox(s, boxInner, key && photoArtCache.get(key));
     if (key && !photoArtCache.has(key)) {

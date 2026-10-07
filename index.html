@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Aristotle Henderson</title>
 <meta name="description" content="Aristotle Henderson, software engineer on the Roblox engine's Data Model team. A globe of the places I've studied and worked.">
+<link rel="canonical" href="https://www.aristotleh.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.aristotleh.com/">
+<meta property="og:title" content="Aristotle Henderson">
+<meta property="og:description" content="Software engineer on the Roblox engine's Data Model team. A globe of the places I've studied and worked.">
 <!-- Decide before the first paint, without waiting for the module graph or data. -->
 <style>
 [data-startup="pending"] #plain,
@@ -24,6 +29,8 @@
   window.siteStartup = {
     mode,
     threeUrl: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+    // Subresource integrity for that file; a CORS request, so the preload and the script share one download.
+    threeIntegrity: "sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==",
     finish() { root.removeAttribute("data-startup"); },
     fallback() {
       this.mode = "html";
@@ -37,6 +44,7 @@
   if (mode === "3d") {
     const link = document.createElement("link");
     link.rel = "preload"; link.as = "script"; link.href = window.siteStartup.threeUrl;
+    link.integrity = window.siteStartup.threeIntegrity; link.crossOrigin = "anonymous";
     document.head.appendChild(link);
   }
   if (mode !== "html") {

@@ -44,6 +44,11 @@ export const SITE_SCHEMA = {
         links: { type: "array", items: {
           type: "object", additionalProperties: false, required: ["label", "url"],
           properties: { label: TEXT, url: { type: "string", pattern: "^https://" } } } },
+        // A link to the resume on this site, after `links`. It's listed only while `show` is true.
+        resume: {
+          type: "object", additionalProperties: false, required: ["path", "show"],
+          properties: { path: { type: "string", pattern: "^/[^\\s\"]+$" }, label: TEXT, show: { type: "boolean" } },
+        },
       },
     },
     // Stop order on the page: as written in `stops`, or sorted by `start` (photos by `photo.taken`).
@@ -229,6 +234,7 @@ export function validate(value, schema, path = "site", errors = []) {
   }
   if (kind === "array") {
     if (schema.minItems && value.length < schema.minItems) at(`needs at least ${schema.minItems} item(s)`);
+    if ("maxItems" in schema && value.length > schema.maxItems) at(`has more than ${schema.maxItems} item(s)`);
     if (schema.items) value.forEach((v, i) => validate(v, schema.items, `${path}[${i}]`, errors));
   }
   if (kind === "object") {

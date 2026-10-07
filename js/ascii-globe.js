@@ -1,10 +1,11 @@
 // The ASCII globe: every character cell casts a ray at the sphere; what it hits picks the glyph and color.
-import { ALL, EARTH_KM, INTRO, KINDS, REGIONS, SITE, STOPS, TERRAIN, groupStops, reduceMotion, shapeOf } from "./site.js";
+import { ALL, EARTH_KM, GROUP_PX, INTRO, KINDS, REGIONS, SITE, STOPS, TERRAIN, groupStops, reduceMotion, shapeOf } from "./site.js";
 import { MODE } from "./mode.js";
 import { active, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
 import { MARK, escHtml, renderBoxes, toAscii } from "./ascii-text.js";
 
+// Returns { resume } to wake the globe after another view, and { remeasure } for when the fonts change.
 export function asciiGlobe() {
   const pre = document.getElementById("ascii-globe");
   const G = SITE.globe, T = G.terrain, D = Math.PI / 180;
@@ -252,11 +253,11 @@ export function asciiGlobe() {
       }
     }
 
-    // Pins, grouped as in 3D (site.js): within about three characters of each other at the middle of the view, and
-    // apart again past five. A group stands at its members' mean position. The current stop stays on its own.
+    // Pins, grouped at the same screen distances as in 3D (site.js). A group stands at its members' mean position.
+    // The current stop stays on its own.
     const pxPerRad = rows * ch / 2 / (alt * tanH);
     const close = alt < 0.2;
-    for (const idx of groupStops(pxPerRad, cw * 3.5, cw * 5, stop.id, wasGroup)) {
+    for (const idx of groupStops(pxPerRad, GROUP_PX.limit, GROUP_PX.keep, stop.id, wasGroup)) {
       const key = idx.length > 1 ? idx.map(i => STOPS[i].id).join("+") : null;
       const sum = [0, 0, 0];
       for (const i of idx) {
@@ -304,13 +305,14 @@ export function asciiGlobe() {
     }
     requestAnimationFrame(frame);
   }
-  window.__resumeAscii = () => {
-    if (!sleeping) return;
-    sleeping = false; last = null; needs = true; wasIntro = null;
-    measureGrid();
-    requestAnimationFrame(frame);
-  };
-  window.__asciiNeeds = () => { measureGrid(); needs = true; };
-  new MutationObserver(() => { needs = true; }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { needs = true; });
+  return {
+    resume() {
+      if (!sleeping) return;
+      sleeping = false; last = null; needs = true; wasIntro = null;
+      measureGrid();
+      requestAnimationFrame(frame);
+    },
+    remeasure() { measureGrid(); needs = true; },
+  };
 }

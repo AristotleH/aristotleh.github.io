@@ -1,6 +1,6 @@
 // The 3D globe (three.js): tiles raised by elevation, pins that group when they crowd, and a camera that flies
 // between stops. It starts the first time the 3D view is shown and sleeps while another view is up.
-import { ALL, EARTH_KM, INTRO, KINDS, SITE, STOPS, groupStops, reduceMotion, shapeOf } from "./site.js";
+import { ALL, EARTH_KM, GROUP_PX, INTRO, KINDS, SITE, STOPS, groupStops, reduceMotion, shapeOf } from "./site.js";
 import { MODE } from "./mode.js";
 import { active, goTo, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
@@ -11,12 +11,14 @@ import { startTiles, terrainInput } from "./tiles-client.js";
 const loadThree = () => window.THREE ? Promise.resolve() : new Promise(done => {
   const s = document.createElement("script");
   s.src = window.siteStartup.threeUrl;
+  s.integrity = window.siteStartup.threeIntegrity;
+  s.crossOrigin = "anonymous";
   s.onload = s.onerror = done;
   document.head.appendChild(s);
 });
 
 // onReady is called once WebGL is known to work, before three.js runs or the tiles are built, so the page can show
-// the cards meanwhile.
+// the cards meanwhile. Resolves false without WebGL, else with { resume } to wake the globe after another view.
 export async function globe(onReady) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
@@ -26,10 +28,7 @@ export async function globe(onReady) {
     preserveDrawingBuffer: false, powerPreference: "high-performance" };
   let gl = null;
   try { gl = canvas.getContext("webgl2", attrs) || canvas.getContext("webgl", attrs); } catch (e) {}
-  if (!gl) {
-    document.documentElement.classList.add("no-webgl");
-    return false;
-  }
+  if (!gl) return false;
   onReady?.();
   // Land and elevation lookups for the pins. The tiles themselves are built off the page (tiles-client.js); the
   // build is handed its input first, so three.js is parsed here while the worker builds.
@@ -164,7 +163,7 @@ export async function globe(onReady) {
     // Compile its shader now, in the gap after arrival, rather than on the first frame of a flight into the region.
     mesh.visible = true; renderer.compile(scene, camera); mesh.visible = false;
     needsRender = true;
-  });
+  }).catch(error => console.warn("Close-up detail failed to build; close-ups use the globe's tiles.", error));
   // A globe tile and the pieces that replace it share one clock, so the swap never leaves a hole.
   function setDetailFocus(dir) {
     detailFocus = dir.clone();
@@ -350,7 +349,6 @@ export async function globe(onReady) {
   }
   applyTheme();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
-  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   // Layout
   let W = 0, Hh = 0, layout = "wide";
@@ -451,7 +449,6 @@ export async function globe(onReady) {
   const east = new THREE.Vector3(), north = new THREE.Vector3(), camDir = new THREE.Vector3(), look = new THREE.Vector3();
   const qStep = new THREE.Quaternion(), qId = new THREE.Quaternion(), qFull = new THREE.Quaternion();
   const proj = new THREE.Vector3();
-  window.onStopChange = () => {};
   const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   let last = null;
@@ -591,9 +588,9 @@ export async function globe(onReady) {
       toCam.copy(camera.position).sub(m.holder.position).normalize();
       m.facing = toCam.dot(m.dir) > 0.15;
     }
-    // Group pins closer than ~46 px at the middle of the view; grouped pins stay together until ~62 px (site.js).
+    // Group pins that crowd at the middle of the view (site.js).
     const pxPerRad = Hh / 2 / (alt * Math.tan(camera.fov * D / 2));
-    const groups = groupStops(pxPerRad, 46, 62, stop.id, markers.map(m => m.group)).map(g => g.map(i => markers[i]));
+    const groups = groupStops(pxPerRad, GROUP_PX.limit, GROUP_PX.keep, stop.id, markers.map(m => m.group)).map(g => g.map(i => markers[i]));
     const live = new Set();
     for (const members of groups) {
       const key = members.length > 1 ? members.map(m => m.s.id).join("+") : null;
@@ -674,12 +671,13 @@ export async function globe(onReady) {
     }
     requestAnimationFrame(frame);
   }
-  window.__resume3D = () => {
-    if (!sleeping3D) return;
-    // Switching views clears the drag flag on <html>; forget the last state so the next frame sets it again.
-    sleeping3D = false; last = null; needsRender = true; wasOverview = null;
-    requestAnimationFrame(frame);
-  };
   requestAnimationFrame(frame);
-  return true;
+  return {
+    resume() {
+      if (!sleeping3D) return;
+      // Switching views clears the drag flag on <html>; forget the last state so the next frame sets it again.
+      sleeping3D = false; last = null; needsRender = true; wasOverview = null;
+      requestAnimationFrame(frame);
+    },
+  };
 }
