@@ -1,6 +1,9 @@
 /* Keep the document visible until enhancement succeeds, even if scripts fail. */
 [hidden]{display:none!important}
 :root{
+  /* Room for a notch or rounded corner at the sides (phones in landscape). The page draws under them (viewport-fit=cover);
+     controls and text keep clear, and the globes, which are background, don't. */
+  --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
   --bg:#F3F2EE; --ink:#1A1A18; --muted:#6B6A64; --line:#D9D7D0;
   --surface:#F3F2EE; --surface-solid:#F3F2EE;
   --accent:#1A1A18; --accent-ink:#F3F2EE;
@@ -38,7 +41,7 @@ body{background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--sans);-webkit
 .label::after{content:"";position:absolute;left:50%;bottom:-5px;width:8px;height:8px;background:var(--ink);transform:translateX(-50%) rotate(45deg)}
 
 
-main{position:relative;z-index:2;padding-inline:16px;pointer-events:none}
+main{position:relative;z-index:2;padding-left:calc(16px + var(--safe-l));padding-right:calc(16px + var(--safe-r));pointer-events:none}
 .card{pointer-events:auto}
 /* On the overview, a touch on the globe pans it in any direction; only the name card scrolls the page. */
 .can-drag #globe{pointer-events:auto;cursor:grab;touch-action:none}
@@ -96,7 +99,7 @@ h2{font-size:1.4rem;line-height:1.2}
 
 
 .hud{position:fixed;z-index:3;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);
-  display:flex;align-items:stretch;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;font:500 14px/1 var(--sans);overflow:hidden;max-width:calc(100vw - 32px)}
+  display:flex;align-items:stretch;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;font:500 14px/1 var(--sans);overflow:hidden;max-width:calc(100vw - 32px - var(--safe-l) - var(--safe-r))}
 .hud button{all:unset;cursor:pointer;min-width:48px;min-height:44px;display:grid;place-items:center;font-size:17px;-webkit-tap-highlight-color:transparent}
 .hud button:not(:disabled):active{background:rgba(127,127,127,.35)}
 .hud button:not(:disabled):hover{background:rgba(127,127,127,.25)}
@@ -109,7 +112,7 @@ h2{font-size:1.4rem;line-height:1.2}
 .hud-mid .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 
 /* View switch, top left. */
-.modebar{position:fixed;z-index:4;top:calc(env(safe-area-inset-top,0px) + 14px);left:16px;display:flex;padding:0 4px;
+.modebar{position:fixed;z-index:4;top:calc(env(safe-area-inset-top,0px) + 14px);left:calc(16px + var(--safe-l));display:flex;padding:0 4px;
   background:var(--bg);border:1px solid var(--line);border-radius:8px}
 .modebar button{all:unset;cursor:pointer;font:500 13px/1 var(--sans);padding:10px 8px;color:var(--muted);
   min-height:18px;-webkit-tap-highlight-color:transparent}
@@ -117,12 +120,13 @@ h2{font-size:1.4rem;line-height:1.2}
 .modebar button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* HTML mode: a basic document. Browser defaults (system colors, default serif, native buttons), nothing else. */
-#plain{max-width:42em;margin:0 auto;padding:8px 16px 48px;font:initial;color:CanvasText}
+#plain{max-width:42em;margin:0 auto;padding:8px calc(16px + var(--safe-r)) 48px calc(16px + var(--safe-l));font:initial;color:CanvasText}
 #plain *{all:revert}
 [data-mode="html"] body{background:Canvas;color:CanvasText;font:initial}
 [data-mode="html"] #globe,[data-mode="html"] #ascii-globe,[data-mode="html"] #labels,[data-mode="html"] #stops,
 [data-mode="html"] .hud{display:none}
-[data-mode="html"] .modebar{all:revert;display:block;max-width:42em;margin:0 auto;padding:12px 16px 0}
+[data-mode="html"] .modebar{all:revert;display:block;max-width:42em;margin:0 auto;
+  padding:calc(12px + env(safe-area-inset-top,0px)) calc(16px + var(--safe-r)) 0 calc(16px + var(--safe-l))}
 [data-mode="html"] .modebar button{all:revert;margin-right:4px}
 [data-mode="html"] .modebar button[aria-pressed="true"]{font-weight:bold}
 
@@ -155,7 +159,7 @@ h2{font-size:1.4rem;line-height:1.2}
 [data-mode="ascii"] .hud,[data-mode="ascii"] .modebar{border-radius:0;font-family:var(--mono)}
 [data-mode="ascii"] .modebar button{font-family:var(--mono)}
 [data-mode="ascii"] .hud{border:1px solid var(--ink)}
-.problems{position:fixed;z-index:4;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 64px);max-width:640px;margin-inline:auto;
+.problems{position:fixed;z-index:4;left:calc(16px + var(--safe-l));right:calc(16px + var(--safe-r));top:calc(env(safe-area-inset-top,0px) + 64px);max-width:640px;margin-inline:auto;
   background:var(--bg);color:var(--ink);border:1px solid var(--ink);border-radius:8px;padding:12px 16px;font-size:.9rem;line-height:1.5}
 .problems ul{margin:6px 0 0;padding-left:18px}
 
@@ -168,7 +172,7 @@ h2{font-size:1.4rem;line-height:1.2}
   .stop.intro{min-height:84vh;min-height:84svh;justify-content:flex-end}
   .card{width:100%}
   .stop.intro .card{width:auto;align-self:stretch}   /* in the overview's column, 100% plus padding would overflow */
-  .hud{bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:16px;right:16px;transform:none;max-width:none}
+  .hud{bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:calc(16px + var(--safe-l));right:calc(16px + var(--safe-r));transform:none;max-width:none}
   .hud-mid{flex:1;justify-content:center}
 }
 @media (prefers-reduced-motion: reduce){
