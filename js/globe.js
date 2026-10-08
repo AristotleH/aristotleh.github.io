@@ -413,7 +413,10 @@ export async function globe(onReady) {
   let spin = 0, userLat = 0;
   // Drag and zoom the globe while the intro is on screen.
   const drag = { on: false, id: null, x: 0, y: 0, t: 0, vLon: 0, vLat: 0, lastMove: -1e9 };
-  const pz = zoomGestures(canvas, () => ALL[active] === INTRO, () => document.querySelector("#intro .card"));
+  // Deep zoom only near detail: elsewhere the overview stops once the relief has eased to close-up heights.
+  const zoomFloor = () => DT && cur.dir.angleTo(DT.center) < DT.radius + 0.12 ? -Infinity
+    : Math.log(0.35 * G.detail.loadBelowAltitudeKm / EARTH_KM / (INTRO.dist - 1));
+  const pz = zoomGestures(canvas, () => ALL[active] === INTRO, () => document.querySelector("#intro .card"), zoomFloor);
   canvas.addEventListener("pointerdown", e => {
     if (ALL[active] !== INTRO) return;
     if (pz.pinching) { drag.on = false; drag.vLon = drag.vLat = 0; drag.lastMove = performance.now(); return; }
@@ -493,9 +496,8 @@ export async function globe(onReady) {
     // Deep zoom only where there's detail to see: near a detail area the overview comes all the way down; elsewhere
     // it stops once the relief has eased to close-up heights, and eases back up to there if you pan away from one.
     if (overview) {
-      const near = DT && cur.dir.angleTo(DT.center) < DT.radius + 0.12;
-      const floorLog = Math.log(0.35 * G.detail.loadBelowAltitudeKm / EARTH_KM / (INTRO.dist - 1));
-      if (!near && pz.log < floorLog) pz.log = still ? floorLog : pz.log + (floorLog - pz.log) * (1 - Math.exp(-dt * 3));
+      const floorLog = zoomFloor();
+      if (pz.log < floorLog) pz.log = still ? floorLog : pz.log + (floorLog - pz.log) * (1 - Math.exp(-dt * 3));
     }
     const narrowBoost = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 1.1 * smooth(0.6, 2.2, stop.dist - 1) : 1;
     const baseLog = Math.log((stop.dist - 1) * narrowBoost) + pz.log;

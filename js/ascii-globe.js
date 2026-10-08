@@ -73,7 +73,10 @@ export function asciiGlobe() {
   }
   addEventListener("resize", () => { measureGrid(); renderBoxes(); });
 
-  const pz = zoomGestures(pre, () => ALL[active] === INTRO, () => document.querySelector("#intro .abox"));
+  // As in 3D: deep zoom only near detail.
+  const zoomFloor = () => detailDirs.some(p => Math.acos(Math.max(-1, Math.min(1, dot(cur.dir, p)))) < 0.15) ? -Infinity
+    : Math.log(0.35 * G.detail.loadBelowAltitudeKm / EARTH_KM / (INTRO.dist - 1));
+  const pz = zoomGestures(pre, () => ALL[active] === INTRO, () => document.querySelector("#intro .abox"), zoomFloor);
   pre.addEventListener("pointerdown", e => {
     if (ALL[active] !== INTRO) return;
     if (pz.pinching) { drag.on = false; drag.lastMove = performance.now(); return; }
@@ -113,9 +116,8 @@ export function asciiGlobe() {
     const narrowBoost = aspectPx < 1 ? 1 + (1 - aspectPx) * 1.1 * smooth(0.6, 2.2, stop.dist - 1) : 1;
     // As in 3D: deep zoom only near detail; elsewhere the overview stops higher and eases back up if you pan away.
     if (overview) {
-      const near = detailDirs.some(p => Math.acos(Math.max(-1, Math.min(1, dot(cur.dir, p)))) < 0.15);
-      const floorLog = Math.log(0.35 * G.detail.loadBelowAltitudeKm / EARTH_KM / (INTRO.dist - 1));
-      if (!near && pz.log < floorLog) pz.log = still ? floorLog : pz.log + (floorLog - pz.log) * (1 - Math.exp(-dt * 3));
+      const floorLog = zoomFloor();
+      if (pz.log < floorLog) pz.log = still ? floorLog : pz.log + (floorLog - pz.log) * (1 - Math.exp(-dt * 3));
     }
     const baseLog = Math.log((stop.dist - 1) * narrowBoost) + pz.log;
     const tLog = Math.min(baseLog + (still ? 0 : Math.min(2.6, ang * 5)), Math.max(baseLog, Math.log(2.6)));
