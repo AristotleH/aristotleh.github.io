@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en" data-mode="html">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aristotle Henderson</title>
+<meta name="description" content="Aristotle Henderson, software engineer on the Roblox engine's Data Model team. A globe of the places I've studied and worked.">
+<link rel="canonical" href="https://www.aristotleh.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.aristotleh.com/">
+<meta property="og:title" content="Aristotle Henderson">
+<meta property="og:description" content="Software engineer on the Roblox engine's Data Model team. A globe of the places I've studied and worked.">
+<!-- Decide before the first paint, without waiting for the module graph or data. -->
+<style>
+[data-startup="pending"] #plain,
+[data-startup="pending"] #stops,
+[data-startup="pending"] .modebar,
+[data-startup="pending"] .hud{display:none!important}
+[data-startup="pending"] body{background:var(--bg,#F3F2EE);color:var(--ink,#1A1A18)}
+[data-startup="pending"] #startup{display:flex!important;position:fixed;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:8px;margin:0;font:16px/1.6 system-ui,sans-serif}
+#startup p{margin:0}
+#startup a{color:inherit;font-size:.9rem}
+</style>
+<script>
+(() => {
+  const root = document.documentElement, known = ["3d", "ascii", "html"];
+  let mode = location.hash.slice(1);
+  if (!known.includes(mode)) mode = "3d";
+  window.siteStartup = {
+    mode,
+    threeUrl: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+    // Subresource integrity for that file; a CORS request, so the preload and the script share one download.
+    threeIntegrity: "sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==",
+    finish() { root.removeAttribute("data-startup"); },
+    fallback() {
+      this.mode = "html";
+      root.dataset.mode = "html";
+      this.finish();
+      // A late initialization must leave the now-readable document in place.
+      document.getElementById("plain")?.removeAttribute("hidden");
+    }
+  };
+  // Only the 3D view uses three.js. Starting there, it downloads now; it runs when the globe needs it (js/globe.js).
+  if (mode === "3d") {
+    const link = document.createElement("link");
+    link.rel = "preload"; link.as = "script"; link.href = window.siteStartup.threeUrl;
+    link.integrity = window.siteStartup.threeIntegrity; link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  }
+  if (mode !== "html") {
+    root.dataset.startup = "pending";
+    document.addEventListener("click", event => {
+      if (root.dataset.startup === "pending" && event.target.closest?.("[data-read-html]")) {
+        event.preventDefault();
+        window.siteStartup.fallback();
+      }
+    });
+    document.addEventListener("error", event => {
+      if (root.dataset.startup === "pending" && event.target?.type === "module") window.siteStartup.fallback();
+    }, true);
+  }
+})();
+</script>
+<link rel="icon" href="/assets/images/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon-16x16.png">
+<link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png">
+<link rel="manifest" href="/assets/images/site.webmanifest">
+<link rel="stylesheet" href="css/site.css">
+<!-- Fetched as soon as the page starts, instead of each waiting on the file that asks for it. -->
+<link rel="preload" href="data/site.json" as="fetch" crossorigin>
+<link rel="preload" href="data/layers/globe-land.txt" as="fetch" crossorigin>
+<link rel="preload" href="data/layers/globe-elevation.txt" as="fetch" crossorigin>
+<link rel="modulepreload" href="js/main.js">
+<link rel="modulepreload" href="js/site.js">
+<link rel="modulepreload" href="js/schema.js">
+<link rel="modulepreload" href="js/page.js">
+<link rel="modulepreload" href="js/globe.js">
+<link rel="modulepreload" href="js/hexgrid.js">
+<link rel="modulepreload" href="js/terrain.js">
+<link rel="modulepreload" href="js/tiles.js">
+<link rel="modulepreload" href="js/tiles-client.js">
+<link rel="modulepreload" href="js/gestures.js">
+<link rel="modulepreload" href="js/mode.js">
+<link rel="modulepreload" href="js/ascii-text.js">
+<link rel="modulepreload" href="js/ascii-fonts.js">
+<link rel="modulepreload" href="js/ascii-globe.js">
+<link rel="modulepreload" href="js/plain.js">
+</head>
+<body>
+
+<div id="startup" hidden><p role="status">Loading…</p><a href="#html" data-read-html>Read HTML</a></div>
+
+<canvas hidden id="globe" aria-hidden="true"></canvas>
+<pre hidden id="ascii-globe" aria-hidden="true"></pre>
+<div id="scroll-zone" aria-hidden="true"></div>
+<div class="ascii-probes" aria-hidden="true"><span id="ascii-probe-globe">MMMMMMMMMM</span><span id="ascii-probe-card">MMMMMMMMMM</span></div>
+<div hidden id="labels" aria-hidden="true"></div>
+
+<div hidden class="modebar" role="group" aria-label="View">
+  <button type="button" data-mode="3d" aria-pressed="true">3D</button><button type="button" data-mode="ascii" aria-pressed="false">ASCII</button><button type="button" data-mode="html" aria-pressed="false">HTML</button>
+</div>
+<div class="problems" id="data-problems" role="alert" hidden></div>
+
+<main id="plain">
+<!-- static-content:start -->
+<header>
+<h1>Aristotle Henderson</h1>
+<p>Software Engineer, San Francisco, CA</p>
+<p>I'm part of the Data Model team for the Roblox engine. Learn more about me below.</p>
+<p><a href="https://www.linkedin.com/in/aristotleh">LinkedIn</a> | <a href="https://github.com/aristotleh">GitHub</a></p>
+</header>
+<hr>
+<h2>Experience and education</h2>
+<article id="plain-roblox"><h3>Roblox</h3>
+<p><em>Jul 2023 – present, San Mateo, California</em></p>
+<p><strong>Software Engineer</strong></p>
+<p>I develop and maintain the systems that give game developers access to the engine's functionality. My focus is code generation for API reflection, low-level C++ optimization, creator tooling, subsystem profiling, and mentoring early-career engineers.</p>
+<p>C++, Python, Lua, Codegen, Profiling</p></article>
+<hr>
+<article id="plain-meta"><h3>Meta</h3>
+<p><em>Jun 2022 – Sep 2022, Menlo Park, California</em></p>
+<p><strong>Software Engineer Intern</strong></p>
+<p>On the Remote Presence team, I built full-stack internal tooling for RTC infrastructure with Hack, GraphQL, and React. The tool visualized and debugged calling data across arbitrary data sets and sources, and I grew it past its initial scope to support wider engineering workflows. I also owned its product design, from Figma prototypes to weekly planning.</p>
+<p>Hack, GraphQL, React, Figma</p></article>
+<hr>
+<article id="plain-marvell"><h3>Marvell Technology</h3>
+<p><em>Jun 2021 – Sep 2021, Burlington, Vermont</em></p>
+<p><strong>Software Engineer Intern</strong></p>
+<p>I wrote software to optimize and analyze components in ASIC AI accelerators and 5G networking products. I used Python, R, and C# to analyze large semiconductor data sets, automate design decisions, and extend statistics-driven optimization tools.</p>
+<p>Python, R, C#</p></article>
+<hr>
+<article id="plain-ucla"><h3>UCLA</h3>
+<p><em>Sep 2019 – Jun 2023, Los Angeles, California</em></p>
+<p><strong>B.S., Computer Science</strong></p>
+<p>I graduated summa cum laude from the Samueli School of Engineering with a 3.96 GPA. I was an Upsilon Pi Epsilon officer and a Tau Beta Pi member, did research at the Scalable Analytics Institute, and led software for DevX's BruinBot delivery robot project.</p>
+<p>UPE, Tau Beta Pi, DevX</p></article>
+<hr>
+<article id="plain-nps"><h3>Naval Postgraduate School</h3>
+<p><em>Jun 2018 – Jul 2018, Monterey, California</em></p>
+<p><strong>Research Intern</strong></p>
+<p>I built mobile apps for Global ECCO, which uses strategy games to connect defense experts. I guided the Android app in Java with Firebase, then led an iOS version in Swift with the same backend and features. The project contributed to material included in our OSD leadership sponsor's 2018 Report to Congress.</p>
+<p>Java, Swift, Firebase, Android, iOS</p></article>
+<hr>
+<article id="plain-carmel"><h3>Carmel High School</h3>
+<p><em>Aug 2015 – Jun 2019, Carmel, California</em></p>
+
+<p>I graduated as valedictorian with a 4.0 GPA after 12 AP courses. I was Head of Autonomous for FIRST Robotics Team 2035.</p>
+<p>FIRST Robotics</p></article>
+<!-- static-content:end -->
+</main>
+<main id="stops" hidden>
+  <section class="stop intro" id="intro"></section>
+  <!-- One section per stop is added from the site data. -->
+</main>
+
+<div hidden class="hud" role="group" aria-label="Stops">
+  <button id="prev" type="button" aria-label="Previous stop">↑</button>
+  <div class="hud-mid" id="hud-top" role="button" tabindex="0" title="Back to top" aria-live="polite">
+    <span class="name" id="hud-name"></span>
+  </div>
+  <button id="next" type="button" aria-label="Next stop">↓</button>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
