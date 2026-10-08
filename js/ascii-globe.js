@@ -151,7 +151,12 @@ export function asciiGlobe() {
     const light = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
     const onLight = parseInt(light.slice(1, 3), 16) > 128;
     const cellDeg = (alt * tanH * 2 / rows) / D;   // roughly how many degrees one character covers
-    const glyph = new Array(cols * rows), cls = new Uint8Array(cols * rows);   // 0 none 1 ocean 2 land 3 high 4 ice 5 atmo 6 star 7 route 8 marker 9 label 10 active label
+    // The surface grid the characters are pinned to: patches about a character in size at the middle of the view,
+    // rounded up to a power of two of a degree, so the grid holds still within a zoom level and only changes when
+    // the zoom crosses a step. A patch is a character tall and wide (characters are narrower than they are tall).
+    const gLat = Math.pow(2, Math.ceil(Math.log2(Math.max(1e-4, cellDeg)))), gLonEq = gLat * cw / ch;
+    const glyph = new Array(cols * rows), cls = new Uint8Array(cols * rows);   // 0 none 1 ocean 2 land 3 high 4 ice 5 atmo 6 star 7 route 8 marker 9 label 10 active label 11 outline;
+    // 13-16 are 1-4 on the shaded side
     const cc = dot(C, C) - 1;
     // Which cells hit the sphere, and the screen direction of the surface normal there, for the outline.
     const hit = new Uint8Array(cols * rows), sx = new Float32Array(cols * rows), sy = new Float32Array(cols * rows);
@@ -174,36 +179,32 @@ export function asciiGlobe() {
         const x = C[0] + dx * s, y = C[1] + dy * s, z = C[2] + dz * s;
         hit[n] = 1; sx[n] = x * R[0] + y * R[1] + z * R[2]; sy[n] = x * U[0] + y * U[1] + z * U[2];
         const lat = Math.asin(Math.max(-1, Math.min(1, y))) / D, lon = Math.atan2(-z, x) / D;
-        let nx = x, ny = y, nz = z;
-        const land = landAt(lat, lon);
-        if (!land) {
-          // Ocean stays quiet so the land reads, but fills the disc: dots everywhere in the light, a checkerboard
-          // in shadow, and a few waves where it's brightest.
-          const lit = Math.max(0, nx * Ldir[0] + ny * Ldir[1] + nz * Ldir[2]);
-          const lattice = (i + j) % 2 === 0, t = hash(i, j);
-          glyph[n] = lit > 0.5 && t < 0.07 ? "~" : lit > 0.3 || lattice ? "." : " ";
-          cls[n] = 1;
+        // Characters belong to the globe, not the screen: each comes from the patch of a surface grid it lands in
+        // (see `patch` above), so turning the globe carries them along. Light from the camera only shades them: the
+        // side turned away is drawn dimmer.
+        const sh = x * Ldir[0] + y * Ldir[1] + z * Ldir[2] < 0.18 ? 12 : 0;
+        const li = Math.floor((lat + 90) / gLat), latC = (li + 0.5) * gLat - 90;
+        const across = Math.max(1, Math.round(360 * Math.max(0.15, Math.cos(latC * D)) / gLonEq)), lonStep = 360 / across;
+        const lj = Math.floor((lon + 180) / lonStep) % across, lonC = (lj + 0.5) * lonStep - 180;
+        const seed = hash(li * 1.37 + 0.5, lj * 0.73 + li * 0.11);
+        if (!landAt(lat, lon)) {
+          // Ocean stays quiet so the land reads: scattered dots and a few waves.
+          glyph[n] = seed < 0.05 ? "~" : seed < 0.6 ? "." : " ";
+          cls[n] = 1 + sh;
           continue;
         }
-        // Hillshade: tilt the normal by the elevation slope across this cell.
-        const d = Math.max(0.01, cellDeg), e0 = elevAt(lat, lon);
-        // Forward differences, doubled to match the old central ones: three lookups a cell instead of five.
-        const gE = (elevAt(lat, lon + d) - e0) * 2, gN = (elevAt(lat + d, lon) - e0) * 2;
-        const exag = 12 / Math.max(0.02, d);
-        const eLon = [-Math.sin(lon * D), 0, -Math.cos(lon * D)], nLat = [-Math.sin(lat * D) * Math.cos(lon * D), Math.cos(lat * D), Math.sin(lat * D) * Math.sin(lon * D)];
-        nx -= (eLon[0] * gE + nLat[0] * gN) * exag * 0.001; ny -= (eLon[1] * gE + nLat[1] * gN) * exag * 0.001; nz -= (eLon[2] * gE + nLat[2] * gN) * exag * 0.001;
-        const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
-        const lit = Math.max(0, nx * Ldir[0] + ny * Ldir[1] + nz * Ldir[2]);
-        const bright = Math.min(1, 0.25 + lit * 0.85);
-        const ice = lat > T.iceLatitude.north || lat < T.iceLatitude.south;
-        if (ice) {
-          const idx = Math.floor((onLight ? 1 - bright : bright) * (RAMP_ICE.length - 0.01));
-          glyph[n] = RAMP_ICE[idx]; cls[n] = 4;
-        } else if (e0 > 3.2 && lit > 0.3) { glyph[n] = "^"; cls[n] = 3; }
+        // Land: density from the patch's relief, lit from the northwest as on a printed relief map, its height and
+        // its own seed.
+        const e0 = elevAt(latC, lonC);
+        const slope = (elevAt(latC, lonC + lonStep) - e0 - (elevAt(latC + gLat, lonC) - e0)) / gLat;   // km per degree
+        const tone = 0.42 + Math.max(-0.35, Math.min(0.35, slope * 0.25)) + Math.min(0.15, e0 * 0.05) + (seed - 0.5) * 0.4;
+        const r = onLight ? 1 - tone : tone;
+        const ice = latC > T.iceLatitude.north || latC < T.iceLatitude.south;
+        if (ice) { glyph[n] = RAMP_ICE[Math.max(0, Math.min(RAMP_ICE.length - 1, Math.floor(r * RAMP_ICE.length)))]; cls[n] = 4 + sh; }
+        else if (e0 > 3.2 && seed < 0.5) { glyph[n] = "^"; cls[n] = 3 + sh; }
         else {
-          const r = onLight ? 1 - bright : bright, jitter = (hash(i * 1.7, j * 2.3) - 0.5) * 0.28;
-          glyph[n] = RAMP_LAND[Math.max(0, Math.min(RAMP_LAND.length - 1, Math.floor((r + jitter) * RAMP_LAND.length)))];
-          cls[n] = e0 > 1.5 ? 3 : 2;
+          glyph[n] = RAMP_LAND[Math.max(0, Math.min(RAMP_LAND.length - 1, Math.floor(r * RAMP_LAND.length)))];
+          cls[n] = (e0 > 1.5 ? 3 : 2) + sh;
         }
       }
     }
@@ -236,7 +237,7 @@ export function asciiGlobe() {
       for (let q = 0; q < text.length; q++) {
         const i = ci + q; if (i < 0 || i >= cols) continue;
         const n = cj * cols + i;
-        if (!force && cls[n] >= 7) return false;
+        if (!force && cls[n] >= 7 && cls[n] <= 11) return false;   // route, markers, labels and the outline
       }
       for (let q = 0; q < text.length; q++) { const i = ci + q; if (i >= 0 && i < cols) { glyph[cj * cols + i] = text[q]; cls[cj * cols + i] = c; } }
       return true;
@@ -284,7 +285,8 @@ export function asciiGlobe() {
 
     // Compose runs of the same class into spans. Each row is its own element and only rows whose markup changed
     // are replaced, so a slow spin restyles and repaints a few rows a frame instead of the whole screen.
-    const CL = ["", "a-o", "a-l", "a-h", "a-i", "a-atm", "a-star", "a-rt", "a-mk", "a-lb", "a-lbo", "a-rim"];
+    const CL = ["", "a-o", "a-l", "a-h", "a-i", "a-atm", "a-star", "a-rt", "a-mk", "a-lb", "a-lbo", "a-rim",
+      "", "a-o a-sh", "a-l a-sh", "a-h a-sh", "a-i a-sh"];   // 13-16: ocean, land, high, ice on the shaded side
     if (rowEls.length !== rows) {
       pre.textContent = "";
       rowEls = []; rowHtml = [];

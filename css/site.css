@@ -145,6 +145,7 @@ h2{font-size:1.4rem;line-height:1.2}
 .a-dim{color:var(--muted)} .a-ink{color:var(--ink);font-weight:500}
 /* Land is dense and heavy; ocean, atmosphere and stars stay faint so the continents stand off the page. */
 .a-o{color:var(--a-ocean);opacity:.7} .a-rim{color:var(--a-ocean);font-weight:500} .a-l{color:var(--a-land);font-weight:500} .a-h{color:var(--a-high);font-weight:500} .a-i{color:var(--a-ice);font-weight:500}
+.a-o.a-sh{opacity:.42} .a-l.a-sh,.a-h.a-sh,.a-i.a-sh{opacity:.6}
 .a-atm{color:var(--a-ocean);opacity:.45} .a-star{color:var(--muted);opacity:.45} .a-rt{color:var(--accent)}
 .a-mk{color:var(--accent);font-weight:500} .a-lb{color:var(--ink)} .a-lbo{background:var(--ink);color:var(--bg);font-weight:500}
 [data-mode="ascii"] #globe,[data-mode="ascii"] #labels,[data-mode="ascii"] .card{display:none}
