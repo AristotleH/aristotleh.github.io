@@ -1,7 +1,7 @@
 {
   "profile": {
     "name": "Aristotle Henderson",
-    "headline": "Software engineer",
+    "headline": "Software Engineer",
     "location": "San Francisco, CA",
     "intro": "I'm part of the Data Model team for the Roblox engine. Learn more about me below.",
     "links": [
@@ -90,7 +90,7 @@
       "start": "2015-08",
       "end": "2019-06",
       "role": null,
-      "body": "I graduated as a valedictorian with a 4.0 GPA after 12 AP courses. I was Head of Autonomous for FIRST Robotics Team 2035.",
+      "body": "I graduated as valedictorian with a 4.0 GPA after 12 AP courses. I was Head of Autonomous for FIRST Robotics Team 2035.",
       "tags": [
         "FIRST Robotics"
       ]
@@ -128,7 +128,7 @@
       "start": "2019-09",
       "end": "2023-06",
       "role": "B.S., Computer Science",
-      "body": "I graduated summa cum laude from the Samueli School of Engineering with a 3.96 GPA. I was an Upsilon Pi Epsilon officer and a Tau Beta Pi member, did research at the Scalable Analytics Institute, and led software development for DevX's BruinBot delivery robot.",
+      "body": "I graduated summa cum laude from the Samueli School of Engineering with a 3.96 GPA. I was an Upsilon Pi Epsilon officer and a Tau Beta Pi member, did research at the Scalable Analytics Institute, and led software for DevX's BruinBot delivery robot project.",
       "tags": [
         "UPE",
         "Tau Beta Pi",
@@ -168,7 +168,7 @@
       "employment": "Internship",
       "workplace": "Hybrid",
       "role": "Software Engineer Intern",
-      "body": "On the Remote Presence team, I built full-stack internal tooling for RTC infrastructure with Hack, GraphQL, and React. It visualizes and debugs calling data across arbitrary data sets and sources, and grew past its first scope to support wider engineering workflows. I also owned its product design, from Figma prototypes to weekly planning.",
+      "body": "On the Remote Presence team, I built full-stack internal tooling for RTC infrastructure with Hack, GraphQL, and React. The tool visualized and debugged calling data across arbitrary data sets and sources, and I grew it past its initial scope to support wider engineering workflows. I also owned its product design, from Figma prototypes to weekly planning.",
       "tags": [
         "Hack",
         "GraphQL",
@@ -189,10 +189,11 @@
       "employment": "Full-time",
       "workplace": "Hybrid",
       "role": "Software Engineer, Engine",
-      "body": "I develop and maintain the systems that give game developers access to the engine's functionality. My focus is Python-based code generation for API reflection, low-level C++ optimization, creator tooling, subsystem profiling, and mentoring early-career engineers.",
+      "body": "I develop and maintain the systems that give game developers access to the engine's functionality. My focus is code generation for API reflection, low-level C++ optimization, creator tooling, subsystem profiling, and mentoring early-career engineers.",
       "tags": [
         "C++",
         "Python",
+        "Lua",
         "Codegen",
         "Profiling"
       ]
