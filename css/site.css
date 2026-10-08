@@ -136,6 +136,8 @@ h2{font-size:1.4rem;line-height:1.2}
 .abox{display:none;margin:0;white-space:pre;color:var(--ink);background:var(--bg);pointer-events:auto;max-width:100%;overflow:hidden}
 .abox .ln{display:block;white-space:pre}
 .abox .ln.tight{line-height:1.08}
+/* A banner drawn smaller than the box's text: its full-size borders and the text block sit at the top of the row. */
+.abox .a-edge,.abox .a-fit{display:inline-block;vertical-align:top}
 .abox a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 .abox a:hover{background:var(--ink);color:var(--bg);text-decoration:none}
 /* Never bold: a synthesized or wider bold face breaks the columns. 500 falls back to regular where it's missing. */

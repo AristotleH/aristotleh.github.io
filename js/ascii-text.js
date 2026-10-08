@@ -69,16 +69,24 @@ export function figlet(text, fontName) {
   return rows.map(r => r.trimEnd());
 }
 
-// Banner that fits `width`: whole name, else one word per block. Tries "standard", then "cybermedium",
-// "small" and "mini", else plain capitals.
+// Banner that fits `width` columns: the whole name, else one word per block, in the first font that fits:
+// "standard", then "small", then "mini", else plain capitals. A font may be drawn down to MIN_BANNER_SCALE of the
+// box's type size to fit, so a phone gets the same lettering as a wider screen; `scale` says how much.
+const MIN_BANNER_SCALE = 0.78;
 export function banner(text, width) {
-  for (const font of ["standard", "cybermedium", "small", "mini"]) {
-    const whole = figlet(text, font);
-    if (Math.max(...whole.map(r => r.length)) <= width) return whole;
-    const words = text.split(/\s+/).map(w => figlet(w, font));
-    if (words.every(b => Math.max(...b.map(r => r.length)) <= width)) return words.flatMap((b, i) => i ? ["", ...b] : b);
+  const widthOf = rows => Math.max(...rows.map(r => r.length));
+  const unindent = rows => {
+    const indent = Math.min(...rows.filter(r => r.trim()).map(r => r.length - r.trimStart().length));
+    return rows.map(r => r.slice(indent));
+  };
+  for (const font of ["standard", "small", "mini"]) {
+    const whole = unindent(figlet(text, font));
+    const words = text.split(/\s+/).map(w => unindent(figlet(w, font))).flatMap((b, i) => i ? ["", ...b] : b);
+    const [a, b] = [whole, words].map(rows => ({ rows, scale: Math.min(1, width / widthOf(rows)) }));
+    const best = b.scale > a.scale ? b : a;
+    if (best.scale >= MIN_BANNER_SCALE) return best;
   }
-  return [toAscii(text).toUpperCase()];
+  return { rows: [toAscii(text).toUpperCase()], scale: 1 };
 }
 export function wrap(text, width) {
   const out = [];
@@ -98,14 +106,16 @@ export function wrap(text, width) {
 // Box lines are arrays of segments { t: text, href?, cls? }, so links survive inside the <pre>.
 // A line can also be { tight: true, segs } to sit closer to its neighbours (banner rows only join up when close).
 // Each line is its own block, so line height can differ per line without breaking the columns.
+// A wide line can also have a `scale` under 1: its text is drawn that much smaller, in a block as wide as the box's
+// inside, between borders kept at full size, so the columns still line up.
 export function boxHtml(lines, inner) {
   const edge = "+" + "-".repeat(inner + 2) + "+";
   const body = lines.map(line => {
-    let segs = line, tight = false, wide = false;
-    if (line && line.segs) { segs = line.segs; tight = !!line.tight; wide = !!line.wide; }
+    let segs = line, tight = false, wide = false, scale = 1;
+    if (line && line.segs) { segs = line.segs; tight = !!line.tight; wide = !!line.wide; scale = wide && line.scale || 1; }
     if (typeof segs === "string") segs = [{ t: segs }];
     // Never wider than the box: trim from the end so the right border stays in its column.
-    const width = wide ? inner + 2 : inner;
+    const width = wide ? Math.floor((inner + 2) / scale) : inner;
     let room = width;
     segs = segs.map(s => { const t = s.t.slice(0, Math.max(0, room)); room -= t.length; return { ...s, t }; });
     const len = segs.reduce((n, s) => n + s.t.length, 0);
@@ -119,6 +129,10 @@ export function boxHtml(lines, inner) {
     }).join("");
     const pad = " ".repeat(Math.max(0, width - len));
     const deco = t => `<span class="a-deco" aria-hidden="true">${t}</span>`;
+    if (scale < 1) {
+      const border = `<span class="a-deco a-edge" aria-hidden="true" style="font-size:${(1 / scale).toFixed(4)}em;line-height:${(1.08 * scale).toFixed(4)}">|</span>`;
+      return `<span class="ln tight" style="font-size:${scale.toFixed(4)}em">${border}<span class="a-fit" style="width:${((inner + 2) * boxCw).toFixed(2)}px">${html}</span>${border}</span>`;
+    }
     return `<span class="ln${tight ? " tight" : ""}">${wide ? deco("|") + html + deco(pad + "|") : deco("| ") + html + deco(pad + " |")}</span>`;
   });
   const rule = `<span class="ln a-deco" aria-hidden="true">${edge}</span>`;
@@ -174,21 +188,20 @@ export function placeholderArt(w) {
 }
 
 export let boxInner = 44;
+let boxCw = 7.8;   // a character's width in the boxes, px
 export function measureBox() {
   const probe = document.getElementById("ascii-probe-card");
-  const cw = probe.getBoundingClientRect().width / 10 || 7.8;
+  const cw = boxCw = probe.getBoundingClientRect().width / 10 || 7.8;
   const avail = Math.min(440, innerWidth - 32);
   boxInner = Math.max(20, Math.min(54, Math.floor(avail / cw) - 5));
 }
 export function introBox(inner) {
   const lines = [];
-  let rows = banner(P.name, inner + 2);
-  const indent = Math.min(...rows.filter(r => r.trim()).map(r => r.length - r.trimStart().length));
-  rows = rows.map(r => r.slice(indent));
+  const { rows, scale } = banner(P.name, inner);   // inside the side padding, so the letters never touch the border
   const bw = Math.max(...rows.map(r => r.length));
-  const lead = " ".repeat(Math.max(0, Math.floor((inner + 2 - bw) / 2)));
+  const lead = " ".repeat(Math.max(0, Math.floor(((inner + 2) / scale - bw) / 2)));
   // The banner art isn't selectable; a hidden plain copy of the name is what gets copied and read aloud.
-  rows.forEach((r, i) => lines.push({ tight: true, wide: true,
+  rows.forEach((r, i) => lines.push({ tight: true, wide: true, scale,
     segs: [{ t: r ? lead + r : "", cls: "a-ink a-deco", plain: i === 0 ? P.name : "" }] }));
   lines.push("");
   for (const l of wrap(`${P.headline}, ${P.location}`, inner)) lines.push([{ t: l, cls: "a-dim" }]);
