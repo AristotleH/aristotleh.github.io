@@ -40,7 +40,9 @@ export let active = 0;
 export let heading = null;
 export const viewStop = () => ALL[heading ?? active];
 export function goTo(i) {
-  i = Math.max(0, Math.min(ALL.length - 1, i));
+  // Past either end there's nowhere to go. Clamping would re-centre the end card instead, which moved the page when it
+  // was scrolled past that card's centre (as it is at the very bottom).
+  if (i < 0 || i >= ALL.length) return;
   heading = i;
   sections[i].scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth", block: "center" });
 }
@@ -91,8 +93,12 @@ export function renderHud(i = active) {
   const s = ALL[i], ascii = MODE === "ascii";
   const name = s === INTRO ? P.name : s.title;
   document.getElementById("hud-name").textContent = ascii ? toAscii(name) : name;
-  document.getElementById("prev").textContent = ascii ? "^" : "↑";
-  document.getElementById("next").textContent = ascii ? "v" : "↓";
+  const prev = document.getElementById("prev"), next = document.getElementById("next");
+  prev.textContent = ascii ? "^" : "↑";
+  next.textContent = ascii ? "v" : "↓";
+  // No step before the overview or after the last card. (The name in the middle still goes back to the top.)
+  prev.disabled = i === 0;
+  next.disabled = i === ALL.length - 1;
 }
 // One width for the stop bar: the widest it gets across all stops (in the current view mode), so it doesn't
 // resize from stop to stop. Capped to the screen; a name that still doesn't fit ends in "...".
