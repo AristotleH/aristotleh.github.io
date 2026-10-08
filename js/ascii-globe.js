@@ -41,6 +41,15 @@ export function asciiGlobe() {
     return bilinear(E.globe, EL.columns, EL.rows, 90, -180, 360 / EL.columns, true, lat, lon) * EL.metersPerUnit / 1000;
   };
   const hash = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
+  // Smooth value noise in 3D, 0..1, varying over about one unit: random values at whole-number points, blended between.
+  const hash3 = (a, b, c) => { const x = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453; return x - Math.floor(x); };
+  const noise3 = (x, y, z) => {
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+    const fx = x - xi, fy = y - yi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
+    const at = (a, b, c) => hash3(xi + a, yi + b, zi + c), mix = (a, b, t) => a + (b - a) * t;
+    return mix(mix(mix(at(0, 0, 0), at(1, 0, 0), u), mix(at(0, 1, 0), at(1, 1, 0), u), v),
+      mix(mix(at(0, 0, 1), at(1, 0, 1), u), mix(at(0, 1, 1), at(1, 1, 1), u), v), w);
+  };
 
   // Vector helpers on plain arrays.
   const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -155,6 +164,7 @@ export function asciiGlobe() {
     // rounded up to a power of two of a degree, so the grid holds still within a zoom level and only changes when
     // the zoom crosses a step. A patch is a character tall and wide (characters are narrower than they are tall).
     const gLat = Math.pow(2, Math.ceil(Math.log2(Math.max(1e-4, cellDeg)))), gLonEq = gLat * cw / ch;
+    const texScale = 1 / (5 * gLat * D);   // texture features about five patches across
     const glyph = new Array(cols * rows), cls = new Uint8Array(cols * rows);   // 0 none 1 ocean 2 land 3 high 4 ice 5 atmo 6 star 7 route 8 marker 9 label 10 active label 11 outline;
     // 13-16 are 1-4 on the shaded side
     const cc = dot(C, C) - 1;
@@ -186,22 +196,26 @@ export function asciiGlobe() {
         const li = Math.floor((lat + 90) / gLat), latC = (li + 0.5) * gLat - 90;
         const across = Math.max(1, Math.round(360 * Math.max(0.15, Math.cos(latC * D)) / gLonEq)), lonStep = 360 / across;
         const lj = Math.floor((lon + 180) / lonStep) % across, lonC = (lj + 0.5) * lonStep - 180;
-        const seed = hash(li * 1.37 + 0.5, lj * 0.73 + li * 0.11);
+        // The patch's centre on the sphere. Its texture varies smoothly over several patches, so a character moving on to the
+        // next patch as the globe turns usually keeps its glyph; glyphs change along the edges of the texture's bands,
+        // and those move with the globe.
+        const cl = Math.cos(latC * D), px0 = cl * Math.cos(lonC * D), py0 = Math.sin(latC * D), pz0 = -cl * Math.sin(lonC * D);
+        const tex = noise3(px0 * texScale, py0 * texScale, pz0 * texScale);
         if (!landAt(lat, lon)) {
-          // Ocean stays quiet so the land reads: scattered dots and a few waves.
-          glyph[n] = seed < 0.05 ? "~" : seed < 0.6 ? "." : " ";
+          // Ocean stays quiet so the land reads: dots, and a few waves.
+          glyph[n] = hash(li * 1.37 + 0.5, lj * 0.73 + li * 0.11) < 0.04 ? "~" : ".";
           cls[n] = 1 + sh;
           continue;
         }
         // Land: density from the patch's relief, lit from the northwest as on a printed relief map, its height and
-        // its own seed.
+        // the texture.
         const e0 = elevAt(latC, lonC);
         const slope = (elevAt(latC, lonC + lonStep) - e0 - (elevAt(latC + gLat, lonC) - e0)) / gLat;   // km per degree
-        const tone = 0.42 + Math.max(-0.35, Math.min(0.35, slope * 0.25)) + Math.min(0.15, e0 * 0.05) + (seed - 0.5) * 0.4;
+        const tone = 0.5 + Math.max(-0.3, Math.min(0.3, slope * 0.12)) + Math.min(0.15, e0 * 0.05) + (tex - 0.5) * 1.1;
         const r = onLight ? 1 - tone : tone;
         const ice = latC > T.iceLatitude.north || latC < T.iceLatitude.south;
         if (ice) { glyph[n] = RAMP_ICE[Math.max(0, Math.min(RAMP_ICE.length - 1, Math.floor(r * RAMP_ICE.length)))]; cls[n] = 4 + sh; }
-        else if (e0 > 3.2 && seed < 0.5) { glyph[n] = "^"; cls[n] = 3 + sh; }
+        else if (e0 > 3.2 && tex > 0.45) { glyph[n] = "^"; cls[n] = 3 + sh; }
         else {
           glyph[n] = RAMP_LAND[Math.max(0, Math.min(RAMP_LAND.length - 1, Math.floor(r * RAMP_LAND.length)))];
           cls[n] = (e0 > 1.5 ? 3 : 2) + sh;
