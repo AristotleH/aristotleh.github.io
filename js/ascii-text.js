@@ -192,7 +192,9 @@ let boxCw = 7.8;   // a character's width in the boxes, px
 export function measureBox() {
   const probe = document.getElementById("ascii-probe-card");
   const cw = boxCw = probe.getBoundingClientRect().width / 10 || 7.8;
-  const avail = Math.min(440, innerWidth - 32);
+  // The column's width: the window less the body's padding (the safe-area insets, css/site.css) and the column's own.
+  const side = el => { const cs = getComputedStyle(el); return parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight); };
+  const avail = Math.min(440, innerWidth - side(document.body) - side(document.getElementById("stops")));
   boxInner = Math.max(20, Math.min(54, Math.floor(avail / cw) - 5));
 }
 export function introBox(inner) {
