@@ -353,6 +353,10 @@ export async function globe(onReady) {
   // Layout
   let W = 0, Hh = 0, layout = "wide";
   function resize() {
+    // While another view is up the canvas is hidden and has no size of its own. The window's size isn't the canvas's
+    // (on a phone the canvas is 100lvh, taller than innerHeight while the toolbars show), so leave it: the globe
+    // resizes when it's shown again. Only the very first sizing falls back to the window.
+    if (!canvas.clientWidth && W) return;
     const nw = canvas.clientWidth || innerWidth, nh = canvas.clientHeight || innerHeight;
     if (nw === W && nh === Hh) return;
     W = nw; Hh = nh;
@@ -366,7 +370,7 @@ export async function globe(onReady) {
     needsRender = true;
     if (started) renderer.render(scene, camera);   // resizing clears the canvas; never show it blank
   }
-  let started = false;
+  let started = false, resizeOnWake = false;
   addEventListener("resize", resize);
   // Resolution follows the frame rate. Over runs of back-to-back frames, if the typical gap between draws is well over
   // the screen's refresh interval, the canvas drops toward one pixel per CSS pixel, by as much as the gap suggests
@@ -458,6 +462,7 @@ export async function globe(onReady) {
   let sleeping3D = false;
   function frame(now) {
     if (MODE !== "3d") { sleeping3D = true; drewLastTick = false; return; }
+    if (resizeOnWake) { resizeOnWake = false; resize(); }
     const drewBefore = drewLastTick;
     drewLastTick = false;
     const dt = last === null ? 0 : Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
@@ -676,6 +681,9 @@ export async function globe(onReady) {
   requestAnimationFrame(frame);
   return {
     resume() {
+      // The window may have changed while another view was up. Resize on the next frame, when the canvas is showing
+      // again (the switch shows it after waking the globe).
+      resizeOnWake = true;
       if (!sleeping3D) return;
       // Switching views clears the drag flag on <html>; forget the last state so the next frame sets it again.
       sleeping3D = false; last = null; needsRender = true; wasOverview = null;
