@@ -196,17 +196,17 @@ export function asciiGlobe() {
         const li = Math.floor((lat + 90) / gLat), latC = (li + 0.5) * gLat - 90;
         const across = Math.max(1, Math.round(360 * Math.max(0.15, Math.cos(latC * D)) / gLonEq)), lonStep = 360 / across;
         const lj = Math.floor((lon + 180) / lonStep) % across, lonC = (lj + 0.5) * lonStep - 180;
-        // The patch's centre on the sphere. Its texture varies smoothly over several patches, so a character moving on to the
-        // next patch as the globe turns usually keeps its glyph; glyphs change along the edges of the texture's bands,
-        // and those move with the globe.
-        const cl = Math.cos(latC * D), px0 = cl * Math.cos(lonC * D), py0 = Math.sin(latC * D), pz0 = -cl * Math.sin(lonC * D);
-        const tex = noise3(px0 * texScale, py0 * texScale, pz0 * texScale);
         if (!landAt(lat, lon)) {
           // Ocean stays quiet so the land reads: dots, and a few waves.
           glyph[n] = hash(li * 1.37 + 0.5, lj * 0.73 + li * 0.11) < 0.04 ? "~" : ".";
           cls[n] = 1 + sh;
           continue;
         }
+        // The texture at the patch's centre on the sphere (land only; most cells are ocean). It varies smoothly over
+        // several patches, so a character moving on to the next patch as the globe turns usually keeps its glyph;
+        // glyphs change along the edges of the texture's bands, and those move with the globe.
+        const cl = Math.cos(latC * D), px0 = cl * Math.cos(lonC * D), py0 = Math.sin(latC * D), pz0 = -cl * Math.sin(lonC * D);
+        const tex = noise3(px0 * texScale, py0 * texScale, pz0 * texScale);
         // Land: density from the patch's relief, lit from the northwest as on a printed relief map, its height and
         // the texture.
         const e0 = elevAt(latC, lonC);
