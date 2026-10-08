@@ -188,7 +188,7 @@
       "end": "present",
       "employment": "Full-time",
       "workplace": "Hybrid",
-      "role": "Software Engineer, Engine",
+      "role": "Software Engineer",
       "body": "I develop and maintain the systems that give game developers access to the engine's functionality. My focus is code generation for API reflection, low-level C++ optimization, creator tooling, subsystem profiling, and mentoring early-career engineers.",
       "tags": [
         "C++",
