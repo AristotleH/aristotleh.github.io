@@ -25,11 +25,11 @@ export async function globe(onReady, onFail) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
   const canvas = document.getElementById("globe");
-  // The context is made here, with the settings three.js would use, and handed to it once it runs. Multisampling
-  // only on screens under two device pixels per CSS pixel: the canvas is drawn at twice the CSS size above that,
-  // where the edges are already fine, and four samples for each of four times the pixels is most of the frame's
-  // GPU time on a phone.
-  const antialias = (devicePixelRatio || 1) < 2;
+  // The context is made here, with the settings three.js would use, and handed to it once it runs. Multisampled on
+  // every screen: without it the tiles' edges stair-step and crawl as the globe turns, visibly so on a DPR 3 phone
+  // (the canvas is drawn at 2x there). Phone GPUs keep the samples in on-chip tile memory, so it costs them little;
+  // it's software renderers such as SwiftShader that it slows down.
+  const antialias = true;
   const attrs = { alpha: false, antialias, depth: true, stencil: true, premultipliedAlpha: true,
     preserveDrawingBuffer: false, powerPreference: "high-performance" };
   let gl = null;
