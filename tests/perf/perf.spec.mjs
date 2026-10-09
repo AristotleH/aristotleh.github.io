@@ -16,7 +16,8 @@ const PROBE = await readFile(new URL("./probe.js", import.meta.url), "utf8");
 const RESULTS = new URL("../perf-results.json", import.meta.url);
 const REPORT_ONLY = !!process.env.PERF_REPORT_ONLY;
 
-test.describe.configure({ mode: "serial" });   // one at a time, so scenarios don't compete for the CPU
+// One at a time (one worker, playwright.perf.config.mjs), so scenarios don't compete for the CPU; not serial mode,
+// which would skip every scenario after one that fails.
 
 async function start(page, { cpu = 1 } = {}) {
   await page.addInitScript(PROBE);
