@@ -46,3 +46,36 @@ jobs:
             tests/playwright-report/
             tests/test-results/
           retention-days: 14
+
+  # Frame rates, script time per frame, GPU work per frame and load times, against tests/perf/budgets.mjs. The
+  # scenarios run one at a time; the table of results goes in the job summary either way.
+  performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tests
+    env:
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:perf
+      - name: Write the results table to the job summary
+        if: always()
+        run: test -f perf-results.json && npm run -s perf:summary >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: |
+            tests/perf-results.json
+            tests/playwright-report/
+          retention-days: 30
