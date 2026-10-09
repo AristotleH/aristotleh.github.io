@@ -5,7 +5,7 @@ import { MODE } from "./mode.js";
 import { active, goTo, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
 import { makeTerrain } from "./terrain.js";
-import { OCEAN_SURFACE, detailStopDirs, rebuildTiles, startTiles, terrainInput } from "./tiles-client.js";
+import { OCEAN_SURFACE, rebuildTiles, startTiles, terrainInput } from "./tiles-client.js";
 import { ICOSA_F, ICOSA_V } from "./hexgrid.js";
 
 // three.js is fetched early when the page starts in 3D (index.html) but only run when the globe asks for it.
@@ -109,39 +109,29 @@ export async function globe(onReady, onFail) {
   // ocean is one sphere, and its fragment shader works out which hexagon a pixel is in. The hex grid is an
   // icosahedron's faces split into a triangular lattice and pushed out onto the sphere (hexgrid.js), so a point's
   // place in its face's lattice comes from its barycentric weights on the face's corners; its tile is the nearest
-  // lattice point, and the tile's colour a hash of that point. The tiles that close-up detail replaces drop away with
-  // the same timing as land tiles (heightMaterial), by discarding their pixels; that shader is used only while detail
-  // shows, since discarding stops the GPU from rejecting hidden pixels early. The colours are random like the tiles'
-  // tones, though not the same ones.
-  const oceanUniforms = {
-    uN: { value: G.grid.hexSubdivisions }, uSea: { value: new THREE.Color() }, uSea2: { value: new THREE.Color() },
-    uFocus: { value: new THREE.Vector3(1, 0, 0) }, uStops: { value: [] }, uStopCount: { value: 0 },
-    uCosReach: { value: Math.cos(Math.atan(2) / G.grid.hexSubdivisions / G.detail.sizeToDistance * 1.25) },   // as tiles.js
-  };
-  const MAX_DETAIL_STOPS = 8;
-  {
-    const dirs = detailStopDirs().slice(0, MAX_DETAIL_STOPS);
-    oceanUniforms.uStops.value = Array.from({ length: MAX_DETAIL_STOPS }, (_, i) => new THREE.Vector3(...(dirs[i] || [0, 0, 0])));
-    oceanUniforms.uStopCount.value = dirs.length;
-  }
-  function oceanMaterial(withDetail) {
+  // lattice point, and the tile's colour a hash of that point. The colours are random like the tiles' tones, though
+  // not the same ones.
+  // Where close-up detail shows, the surface sinks 0.3 km, under the detail's own ocean tiles (0.5 km up in close-ups),
+  // so they cover it, and the globe tiles they replace drop away beneath it. (Cutting the replaced hexagons out of the
+  // surface instead meant a shader that discards pixels, which stops the GPU rejecting hidden pixels early: it cost a
+  // quarter of the frame rate in close-ups.)
+  const oceanUniforms = { uN: { value: G.grid.hexSubdivisions }, uSea: { value: new THREE.Color() }, uSea2: { value: new THREE.Color() } };
+  function oceanMaterial() {
     const mat = new THREE.MeshLambertMaterial();
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, heightUniforms, oceanUniforms);
       sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
         attribute vec3 aM, aA, aB, aC;   // the face's inverse corner matrix times the position, and its corners
         varying vec3 vM, vA, vB, vC;
-        uniform float uM;
+        uniform float uM, uP;
         uniform vec2 uOcean;`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>
         vM = aM; vA = aA; vB = aB; vC = aC;
-        transformed *= 1.0 + mix(uOcean.x, uOcean.y, uM) / ${EARTH_KM.toFixed(1)};`);
+        transformed *= 1.0 + (mix(uOcean.x, uOcean.y, uM) - 0.3 * min(1.0, uP * 4.0)) / ${EARTH_KM.toFixed(1)};`);
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
         varying vec3 vM, vA, vB, vC;
-        uniform float uN, uP, uCosReach;
-        uniform vec3 uSea, uSea2, uFocus;
-        uniform vec3 uStops[${MAX_DETAIL_STOPS}];
-        uniform int uStopCount;`)
+        uniform float uN;
+        uniform vec3 uSea, uSea2;`)
       .replace("#include <color_fragment>", `#include <color_fragment>
         // Lattice weights on the face's corners (summing to n), and the nearest lattice point: within a small
         // triangle of the lattice, the corner with the largest barycentric weight.
@@ -159,21 +149,14 @@ export async function globe(onReady, onFail) {
         vec3 P = normalize((uN - q.x - q.y) * vA + q.x * vB + q.y * vC);
         vec3 p3 = fract(floor(P * 2048.0 + 0.5) * 0.1031);
         p3 += dot(p3, p3.yzx + 33.33);
-        diffuseColor.rgb = mix(uSea, uSea2, fract((p3.x + p3.y) * p3.z));
-        ${withDetail ? `
-        bool bay = false;
-        for (int i = 0; i < ${MAX_DETAIL_STOPS}; i++) if (i < uStopCount && dot(P, uStops[i]) > uCosReach) bay = true;
-        if (bay) {
-          float delay = min(1.0, acos(clamp(dot(P, uFocus), -1.0, 1.0)) / 0.06);
-          if (clamp(uP * 1.6 - delay * 0.6, 0.0, 1.0) >= 0.35) discard;
-        }` : ""}`);
+        diffuseColor.rgb = mix(uSea, uSea2, fract((p3.x + p3.y) * p3.z));`);
     };
-    mat.customProgramCacheKey = () => withDetail ? "ocean-detail" : "ocean";
+    mat.customProgramCacheKey = () => "ocean";
     return mat;
   }
-  let ocean = null, oceanMat = null, oceanDetailMat = null;
+  let ocean = null, oceanMat = null;
   if (OCEAN_SURFACE) {
-    oceanMat = oceanMaterial(false); oceanDetailMat = oceanMaterial(true);
+    oceanMat = oceanMaterial();
     // Each face split 16 times: the flat triangles dip at most 0.0006 radii (4 km) inside the sphere, which land
     // walls reach below (heightMaterial), and 5120 triangles in all.
     const S = 16, pos = [], aM = [], aA = [], aB = [], aC = [], index = [];
@@ -206,8 +189,8 @@ export async function globe(onReady, onFail) {
   // and the plain lit and unlit ones the pins and the core use.
   {
     const geo = new THREE.BufferGeometry();
-    const warm = [tileMat, new THREE.MeshLambertMaterial(), new THREE.MeshBasicMaterial(), ...(ocean ? [oceanMat, oceanDetailMat] : [])]
-      .map(m => new THREE.Mesh(m === oceanMat || m === oceanDetailMat ? ocean.geometry : geo, m));
+    const warm = [tileMat, new THREE.MeshLambertMaterial(), new THREE.MeshBasicMaterial(), ...(ocean ? [oceanMat] : [])]
+      .map(m => new THREE.Mesh(m === oceanMat ? ocean.geometry : geo, m));
     scene.add(...warm); renderer.compile(scene, camera); scene.remove(...warm);
   }
   // The globe's tiles, from the worker: what each tile is, and each block's geometry as plain arrays.
@@ -279,7 +262,6 @@ export async function globe(onReady, onFail) {
   // A globe tile and the pieces that replace it share one clock, so the swap never leaves a hole.
   function setDetailFocus(dir) {
     detailFocus = dir.clone();
-    oceanUniforms.uFocus.value.copy(dir);
     const f = new THREE.Vector3(), cap = 0.06;
     for (let i = 0; i < COUNT; i++) if (tileBay[i]) tileDelay[i] = Math.min(1, f.fromArray(tileDir, i * 3).angleTo(dir) / cap);
     for (const ch of chunks) if (ch.M && ch.bayAt.length) {
@@ -335,10 +317,11 @@ export async function globe(onReady, onFail) {
     }).catch(error => console.warn("Close-up detail failed to rebuild; close-ups use the globe's tiles.", error));
   });
   if (ocean) scene.add(ocean);
-  // The core hides tiles that have dropped away, and anything seen through the gaps between tiles. Over an ocean
-  // surface it's only needed while close-up detail shows, where the ocean's replaced tiles are cut away.
+  // The core hides tiles that have dropped away, and anything seen through the gaps between tiles. An ocean surface
+  // does both, so then there's none.
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.999, 64, 48), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   core.renderOrder = 1000;
+  core.visible = !ocean;
   scene.add(core);
   // Atmosphere: a faint halo just outside the globe's edge. It fades out in close-ups, where the camera sits inside it.
   const atmo = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 40), new THREE.ShaderMaterial({
@@ -720,7 +703,6 @@ export async function globe(onReady, onFail) {
     heightUniforms.uM.value = lastM = m;
     heightUniforms.uP.value = lastDetail = detailP;
     if (DT) DT.mesh.visible = detailP > 0 && DT.count > 0;
-    if (ocean) { ocean.material = detailP > 0 ? oceanDetailMat : oceanMat; core.visible = detailP > 0; }
     trailMat.opacity = 0.9 * smooth(0.03, 0.12, alt);
     trailMat.visible = trailMat.opacity > 0.01;
     atmo.material.uniforms.strength.value = smooth(0.25, 0.9, alt);

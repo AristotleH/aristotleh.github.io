@@ -27,9 +27,6 @@ export function terrainInput() {
 // (globe.js) and the tile build leaves ocean tiles out (tiles.js).
 export const OCEAN_SURFACE = SITE.globe.grid.shape === "hex" && !(SITE.globe.grid.tileGap > 0);
 
-// Directions of the stops inside a detail region: globe tiles near them are replaced by detail in close-ups.
-export const detailStopDirs = () => REGIONS.flatMap(g => STOPS.filter(s => inRegion(g, s.lat, s.lon)).map(s => dirOf(s.lat, s.lon)));
-
 function tileInput(terrain) {
   const G = SITE.globe;
   // Stops inside a detail region, and one centre per region for its hex detail grids.
