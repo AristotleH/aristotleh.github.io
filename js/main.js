@@ -1,7 +1,7 @@
 // Entry point: builds the page, then shows the chosen view. Each view starts the first time it's shown and sleeps
 // while another one is up.
 import { MODE, useMode } from "./mode.js";
-import { initPage, measure, renderHud, showInPlain, sizeHud, syncScrollZone, updateActive } from "./page.js";
+import { initPage, measure, placeIntro, renderHud, showInPlain, sizeHud, syncScrollZone, updateActive } from "./page.js";
 import { globe } from "./globe.js";
 import { renderBoxes } from "./ascii-text.js";
 import { asciiGlobe } from "./ascii-globe.js";
@@ -76,6 +76,7 @@ async function setMode(m, explicit = false) {
   syncScrollZone();
   renderHud();
   sizeHud();
+  placeIntro();
   requestAnimationFrame(() => { measure(); updateActive(); });
 }
 for (const b of document.querySelectorAll(".modebar button")) b.addEventListener("click", () => setMode(b.dataset.mode, true));

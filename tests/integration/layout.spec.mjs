@@ -88,6 +88,29 @@ test.describe("after the window changed under another view", () => {
   }
 });
 
+test.describe("the overview on a phone", () => {
+  test.use(PHONE);
+
+  for (const mode of ["3d", "ascii"]) {
+    test(`${mode}: the name card stands just above the stop bar`, async ({ page }) => {
+      await open(page, mode);
+      const card = await box(page, mode === "3d" ? "#intro .card" : "#intro .abox"), hud = await box(page, ".hud");
+      const gap = hud.top - card.bottom;
+      expect(gap).toBeGreaterThanOrEqual(12);
+      expect(gap).toBeLessThanOrEqual(20);
+    });
+  }
+
+  test("it keeps its place while the page scrolls and the stop bar moves", async ({ page }) => {
+    await open(page);
+    const before = await page.locator("#intro").evaluate(e => e.getBoundingClientRect().height);
+    await page.evaluate(() => scrollTo(0, 300));
+    await page.setViewportSize({ width: PHONE.viewport.width, height: PHONE.viewport.height + 60 });   // toolbars collapse
+    await page.waitForTimeout(200);
+    expect(await page.locator("#intro").evaluate(e => e.getBoundingClientRect().height)).toBe(before);
+  });
+});
+
 test.describe("the ASCII name card", () => {
   for (const width of [393, 320]) {
     test(`its box lines are all the same width at ${width} px`, async ({ page }) => {
