@@ -61,7 +61,22 @@ async function wheelZoom(page, ms, [x, y] = [900, 400]) {
     await wait(page, 16);
   }
 }
-const stopCount = async () => (await siteData()).stops.length;
+// Pinch out and back in, twice, on a phone; the wheel in and out on a desktop. For 4 s.
+async function zoom(c, page, size) {
+  if (size !== "phone") return wheelZoom(page, 4000);
+  const T = (type, pts) => c.send("Input.dispatchTouchEvent", { type, touchPoints: pts });
+  await T("touchStart", [{ x: 150, y: 260, id: 1 }, { x: 240, y: 260, id: 2 }]);
+  const t0 = Date.now();
+  while (Date.now() - t0 < 4000) {
+    const s = 45 + Math.abs(Math.sin((Date.now() - t0) / 1000 * Math.PI / 2)) * 120;
+    await T("touchMove", [{ x: 195 - s, y: 260, id: 1 }, { x: 195 + s, y: 260, id: 2 }]);
+    await wait(page, 16);
+  }
+  await T("touchEnd", []);
+}
+// The steps the stop bar goes through after the overview: every section on the page (stops, and Projects when
+// there are any) but the first.
+const stepCount = page => page.evaluate(() => document.querySelectorAll("#stops > section").length - 1);
 
 const results = {};
 test.afterAll(async () => {
@@ -123,18 +138,7 @@ for (const [size, use, cpu] of [["phone", PHONE3, 4], ["desktop", DESKTOP, 1]]) 
       await globeDrawn(page);
       await wait(page, 2000);
       await mark(page);
-      if (size === "phone") {
-        // Pinch out and back in, twice.
-        const T = (type, pts) => c.send("Input.dispatchTouchEvent", { type, touchPoints: pts });
-        await T("touchStart", [{ x: 150, y: 260, id: 1 }, { x: 240, y: 260, id: 2 }]);
-        const t0 = Date.now();
-        while (Date.now() - t0 < 4000) {
-          const s = 45 + Math.abs(Math.sin((Date.now() - t0) / 1000 * Math.PI / 2)) * 120;
-          await T("touchMove", [{ x: 195 - s, y: 260, id: 1 }, { x: 195 + s, y: 260, id: 2 }]);
-          await wait(page, 16);
-        }
-        await T("touchEnd", []);
-      } else await wheelZoom(page, 4000);
+      await zoom(c, page, size);
       await check(`3d-${size}-zoom`, await stats(page), info);
     });
 
@@ -144,9 +148,9 @@ for (const [size, use, cpu] of [["phone", PHONE3, 4], ["desktop", DESKTOP, 1]]) 
       await globeDrawn(page);
       await wait(page, 2000);
       await mark(page);
-      // Through every stop, a flight each 2.5 s: overview to the Bay Area (close-up detail loads), then down the coast,
+      // Through every step, a flight each 2.5 s: overview to the Bay Area (close-up detail loads), then down the coast,
       // across the country and back.
-      for (let i = 0, n = await stopCount(); i < n; i++) {
+      for (let i = 0, n = await stepCount(page); i < n; i++) {
         await page.evaluate(() => document.getElementById("next").click());
         await wait(page, 2500);
       }
@@ -184,12 +188,21 @@ for (const [size, use, cpu] of [["phone", PHONE3, 4], ["desktop", DESKTOP, 1]]) 
       await check(`ascii-${size}-drag`, await stats(page), info);
     });
 
+    test(`ascii-${size}-zoom`, async ({ page }, info) => {
+      const c = await start(page, { cpu });
+      await open(page, "ascii");
+      await wait(page, 2000);
+      await mark(page);
+      await zoom(c, page, size);
+      await check(`ascii-${size}-zoom`, await stats(page), info);
+    });
+
     test(`ascii-${size}-flight`, async ({ page }, info) => {
       await start(page, { cpu });
       await open(page, "ascii");
       await wait(page, 2000);
       await mark(page);
-      for (let i = 0, n = await stopCount(); i < n; i++) {
+      for (let i = 0, n = await stepCount(page); i < n; i++) {
         await page.evaluate(() => document.getElementById("next").click());
         await wait(page, 2500);
       }

@@ -30,9 +30,11 @@ export const BUDGETS = {
   "ascii-desktop-load": { limit: { firstRow: 300 }, target: { firstRow: 100 } },
   "ascii-phone-idle": { limit: { "min:fps": 48, jsP95: 11 }, target: { "min:fps": 59, jsP95: 5, jsMax: 16 } },
   "ascii-phone-drag": { limit: { "min:fps": 48, jsP95: 13 }, target: { "min:fps": 59, jsP95: 6, jsMax: 16 } },
+  "ascii-phone-zoom": { limit: { "min:fps": 22, jsP95: 18 }, target: { "min:fps": 59, jsP95: 8, jsMax: 16 } },   // main: 24.5 fps, 20.9 ms
   "ascii-phone-flight": { limit: { "min:fps": 45, jsP95: 18 }, target: { "min:fps": 59, jsP95: 8, jsMax: 16 } },
   "ascii-desktop-idle": { limit: { "min:fps": 57, jsP95: 5 }, target: { "min:fps": 60, jsP95: 2 } },
   "ascii-desktop-drag": { limit: { "min:fps": 57, jsP95: 5 }, target: { "min:fps": 60, jsP95: 2 } },
+  "ascii-desktop-zoom": { limit: { "min:fps": 55, jsP95: 7 }, target: { "min:fps": 60, jsP95: 3 } },
   "ascii-desktop-flight": { limit: { "min:fps": 57, jsP95: 10 }, target: { "min:fps": 60, jsP95: 4, jsMax: 8 } },
 };
 
