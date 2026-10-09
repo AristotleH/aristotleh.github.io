@@ -2,7 +2,7 @@
 
 My personal website, served by GitHub Pages at [www.aristotleh.com](https://www.aristotleh.com). It's a single static page that shows a globe of the places I've studied and worked, with a card for each place.
 
-There are no build steps and no dependencies to install. The page is plain HTML, CSS and JavaScript modules. three.js comes from cdnjs.
+There are no build steps and no dependencies to install for the site itself (the tests have their own, in `tests/`). The page is plain HTML, CSS and JavaScript modules. three.js comes from cdnjs.
 
 ## The three views
 
@@ -24,6 +24,8 @@ Every visit starts in 3D unless the URL ends in `#ascii` or `#html`. A script in
 | `data/layers/` | The land and elevation rasters the globe is built from, as base64 text. |
 | `scripts/render-static.mjs` | Writes the HTML document into `index.html` from `data/site.json`. |
 | `.github/workflows/static-content.yml` | CI: checks that the HTML document in `index.html` matches the data. |
+| `tests/` | Unit and integration tests, with their own `package.json`. The site itself needs none of it. |
+| `.github/workflows/tests.yml` | CI: runs the tests. |
 | `assets/` | Favicons, the web manifest and the resume (PDF and its LaTeX source). |
 | `CNAME`, `.nojekyll` | The custom domain, and serving the files as they are, without Jekyll. |
 
@@ -99,3 +101,17 @@ Global layers need twice as many columns as rows. The Bay Area detail region has
 - The tiles are built in a worker and drawn in blocks; blocks out of sight are skipped, and their buffers are made as they come into view. The arrays are freed once they're on the GPU.
 - The globe redraws only when something changes. On devices that can't keep up, it lowers the canvas resolution.
 - If the browser takes the WebGL context away (phones can, under memory pressure), the globe pauses, and when the context comes back it rebuilds its tiles in the worker.
+
+## Tests
+
+The tests are in `tests/` and run on every push and pull request (`.github/workflows/tests.yml`). To run them locally you need Node 22:
+
+```
+cd tests
+npm ci
+npx playwright install chromium   # once
+npm run test:unit
+npm run test:integration
+```
+
+The unit tests use Node's built-in test runner on the modules in `js/`: the data schema, the HTML document, ordering and pin grouping, the globe's grid, terrain and tiles, the ASCII text, and the zoom gestures. The integration tests open the page in headless Chromium with Playwright, at phone and desktop sizes, and check startup and the fallbacks to the HTML document, the stop bar, dragging and zooming the globes, safe areas, recovery from a lost WebGL context, and problems in `site.json`. `npm test` runs both.

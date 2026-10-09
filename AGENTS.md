@@ -6,7 +6,7 @@ Guidance for coding agents working on this repository. `README.md` describes the
 
 Aristotle Henderson's personal website, served by GitHub Pages at www.aristotleh.com (`CNAME`). It's one static page, `index.html`, showing a globe of the places he has studied and worked, with a card for each, in three views: 3D (three.js), ASCII, and a plain HTML document. All content comes from `data/site.json`.
 
-There is no build step, no bundler, no package manager and no framework. The page is hand-written HTML, CSS and native ES modules. `.nojekyll` makes GitHub Pages serve the files as they are. Keep it that way: don't add a `package.json`, a bundler or npm dependencies unless the owner asks.
+There is no build step, no bundler, no package manager and no framework. The page is hand-written HTML, CSS and native ES modules. `.nojekyll` makes GitHub Pages serve the files as they are. Keep it that way: don't add a `package.json`, a bundler or npm dependencies to the site unless the owner asks. The one exception is `tests/`, which has its own `package.json` for the test tools; nothing the site serves may import from it.
 
 The only third-party code is three.js r128, loaded from cdnjs (see "three.js" below).
 
@@ -20,15 +20,23 @@ The only third-party code is three.js r128, loaded from cdnjs (see "three.js" be
 
 ## Testing
 
-There is no test suite in the repository. Changes have been verified by driving the page in headless Chromium with `playwright-core`, outside the repo. If you do the same:
+The tests live in `tests/`, with their own `package.json` (`@playwright/test`, and `three@0.128.0` so the integration tests don't fetch three.js from cdnjs). From `tests/`:
 
-- Point Playwright at a system Chromium and launch with `--use-gl=swiftshader --enable-unsafe-swiftshader` for WebGL. Software rendering is slow, so frame timings show the direction of a change, not what a phone will do; per-draw-call costs are exaggerated and GPU costs aren't representative.
-- three.js is loaded with `integrity` and `crossorigin="anonymous"`. If you intercept the cdnjs request and serve a local copy (three r128 is the npm package `three@0.128.0`, `build/three.min.js`), add an `access-control-allow-origin: *` header, or the browser blocks it and the page falls back to HTML.
-- Use a phone-sized viewport (393×852, `hasTouch`, `isMobile`) as well as desktop. Many of the bugs fixed so far were phone-only: touch gestures, landscape layout, browser toolbars changing the height, the notch.
-- CDP `Emulation.setCPUThrottlingRate` (4×) approximates a phone's CPU. `Emulation.setSafeAreaInsetsOverride` emulates the notch (iPhone landscape: 47 px left and right, 21 px bottom; portrait: 59 px top, 34 px bottom).
-- Touch gestures: send them with CDP `Input.dispatchTouchEvent`. With `reducedMotion: "reduce"` the camera moves instantly and the idle spin stops, which makes before/after comparisons deterministic.
-- To compare with the current version, check out `main` in a git worktree and serve it on a second port.
-- Test the fallbacks when you touch startup: no JavaScript, three.js blocked, `data/site.json` blocked, a module blocked, the tile worker blocked, and `#ascii` / `#html` URLs.
+- `npm ci` once, and `npx playwright install chromium` if Playwright's Chromium isn't installed (in Claude Code's cloud containers it already is, at `/opt/pw-browsers`; `@playwright/test` is pinned to the version that matches it).
+- `npm run test:unit`: Node's built-in test runner on `tests/unit/*.test.mjs`. These import the modules in `js/` directly with a few browser globals stubbed (`unit/env.mjs`), and cover the data schema and validation, the HTML document and `render-static.mjs`, ordering and pin grouping, the hexagonal grid, terrain lookups, the tile build, the ASCII text and banner, the zoom gestures, and the three.js integrity hash.
+- `npm run test:integration`: Playwright on `tests/integration/*.spec.mjs`, driving the real page in headless Chromium, served by `tests/server.mjs` on port 4173. They cover startup and every fallback, navigation with the stop bar, drag, pinch and wheel on both globes, the ASCII globe's characters moving with it, safe areas, the canvas's proportions after another view, a lost WebGL context, and problems in `site.json`.
+- `.github/workflows/tests.yml` runs both on every push and pull request, and uploads the Playwright report and traces when the integration tests fail.
+
+Add a test with each behaviour change or bug fix, and check that it fails without the fix. Things to know when writing integration tests:
+
+- `integration/fixtures.mjs` serves three.js from `node_modules` with the `access-control-allow-origin: *` header the integrity check needs (without it the browser blocks the file and the page falls back to HTML), and fails any test that leaves an uncaught error on the page. Clear `pageErrors` in a test that expects one.
+- WebGL runs on SwiftShader (`--use-gl=swiftshader --enable-unsafe-swiftshader`). Software rendering is slow, so frame timings show the direction of a change, not what a phone will do; per-draw-call costs are exaggerated and GPU costs aren't representative. The WebGL canvas can't be read back from the page, so tests look at screenshots (`globeDrawn`, `colours`).
+- Use a phone-sized viewport (`PHONE`: 393×852, `hasTouch`, `isMobile`) as well as desktop. Many of the bugs fixed so far were phone-only: touch gestures, landscape layout, browser toolbars changing the height, the notch.
+- Reduced motion goes in `contextOptions: { reducedMotion: "reduce" }`; a top-level `reducedMotion` option is silently ignored. With it the camera moves at once and the idle spin stops, so before/after comparisons are deterministic. The ASCII globe still changes once the elevation data arrives; wait for it to settle (`settledRows`).
+- Touch gestures: CDP `Input.dispatchTouchEvent`. Chrome captures touch pointers to the element they started on, so a bug in pointer capture only shows when that element is replaced mid-gesture (the ASCII globe redraws its rows while zooming).
+- CDP `Emulation.setSafeAreaInsetsOverride` emulates the notch (iPhone landscape: 47 px left and right, 21 px bottom; portrait: 59 px top, 34 px bottom). `Emulation.setCPUThrottlingRate` (4×) approximates a phone's CPU.
+- The tests run on 127.0.0.1, so problems in `site.json` are listed on the page.
+- To compare with `main`, check it out in a git worktree and serve it on a second port.
 
 ## Conventions
 
