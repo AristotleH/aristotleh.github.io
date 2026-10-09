@@ -25,8 +25,12 @@ export async function globe(onReady, onFail) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
   const canvas = document.getElementById("globe");
-  // The context is made here, with the settings three.js would use, and handed to it once it runs.
-  const attrs = { alpha: false, antialias: true, depth: true, stencil: true, premultipliedAlpha: true,
+  // The context is made here, with the settings three.js would use, and handed to it once it runs. Multisampling
+  // only on screens under two device pixels per CSS pixel: the canvas is drawn at twice the CSS size above that,
+  // where the edges are already fine, and four samples for each of four times the pixels is most of the frame's
+  // GPU time on a phone.
+  const antialias = (devicePixelRatio || 1) < 2;
+  const attrs = { alpha: false, antialias, depth: true, stencil: true, premultipliedAlpha: true,
     preserveDrawingBuffer: false, powerPreference: "high-performance" };
   let gl = null;
   try { gl = canvas.getContext("webgl2", attrs) || canvas.getContext("webgl", attrs); } catch (e) {}
@@ -37,7 +41,7 @@ export async function globe(onReady, onFail) {
   const TR = makeTerrain(await terrainInput());
   await loadThree();
   if (!window.THREE) throw new Error("three.js didn't load");
-  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true, alpha: false, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 
   const scene = new THREE.Scene();
