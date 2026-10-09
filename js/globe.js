@@ -18,8 +18,9 @@ const loadThree = () => window.THREE ? Promise.resolve() : new Promise(done => {
 });
 
 // onReady is called once WebGL is known to work, before three.js runs or the tiles are built, so the page can show
-// the cards meanwhile. Resolves false without WebGL, else with { resume } to wake the globe after another view.
-export async function globe(onReady) {
+// the cards meanwhile; onFail if the globe can't be drawn after that (its tiles fail to rebuild after a lost context).
+// Resolves false without WebGL, else with { resume } to wake the globe after another view.
+export async function globe(onReady, onFail) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
   const canvas = document.getElementById("globe");
@@ -187,24 +188,39 @@ export async function globe(onReady) {
   // restores what it can, but the tiles' arrays were freed once uploaded, so they're built again and their buffers
   // made afresh as blocks come into view. Pins, the core and the atmosphere keep their arrays and come back by
   // themselves. Until then the globe isn't drawn.
-  let contextLost = false;
-  canvas.addEventListener("webglcontextlost", e => { e.preventDefault(); contextLost = true; });
+  let contextLost = false, broken = false, detailBeforeLoss = null, contextEpoch = 0;   // the epoch counts losses and restores
+  canvas.addEventListener("webglcontextlost", e => {
+    e.preventDefault(); contextLost = true; contextEpoch++;
+    // Close-ups use the globe's own tiles until the detail mesh is rebuilt, or for good if that fails: a detail
+    // state without its mesh would hide the tiles it replaces and leave a hole.
+    if (DT) { detailBeforeLoss = DT; DT = null; }
+  });
   canvas.addEventListener("webglcontextrestored", async () => {
+    const epoch = ++contextEpoch;   // a loss or another restore after this one abandons it
     // The old buffers went with the lost context, and three.js starts its caches afresh, so the meshes are only dropped.
     for (const ch of chunks) if (ch.mesh) { scene.remove(ch.mesh); ch.mesh = ch.M = null; }
-    const lostDetail = DT;
+    const lostDetail = detailBeforeLoss;
     if (lostDetail) scene.remove(lostDetail.mesh);
     const job = rebuildTiles();
     try {
       const fresh = await job.globe;
-      fresh.blocks.forEach((b, i) => { chunks[i].geo = b.geo; });
-    } catch (error) { console.warn("The globe's tiles failed to rebuild.", error); return; }
+      if (epoch !== contextEpoch) return;
+      // Only blocks still waiting for arrays: one realized meanwhile (by the idle build) already has a mesh, and
+      // arrays left on it would never be uploaded or freed.
+      fresh.blocks.forEach((b, i) => { if (!chunks[i].mesh) chunks[i].geo = b.geo; });
+    } catch (error) {
+      // No tiles to draw: show the HTML document, as for a build that fails at startup.
+      if (epoch === contextEpoch) { broken = true; onFail?.(error); }
+      return;
+    }
     applyTheme();   // the clear colour was reset with the context
     contextLost = false; needsRender = true; lastSig = NaN;
     if (lostDetail) job.detail.then(d => {
+      if (epoch !== contextEpoch) return;
       const M = geometryFrom(d.geo, true);
       M.geo.boundingSphere = lostDetail.M.geo.boundingSphere;
       lostDetail.M = M; lostDetail.mesh.geometry = M.geo;
+      DT = lostDetail; detailBeforeLoss = null;
       paintDetail();
       if (detailFocus) setDetailFocus(detailFocus);
       scene.add(lostDetail.mesh);
@@ -715,13 +731,15 @@ export async function globe(onReady) {
   requestAnimationFrame(frame);
   return {
     resume() {
+      if (broken) return false;   // it can't draw any more; the caller shows the HTML document
       // The window may have changed while another view was up. Resize on the next frame, when the canvas is showing
       // again (the switch shows it after waking the globe).
       resizeOnWake = true;
-      if (!sleeping3D) return;
+      if (!sleeping3D) return true;
       // Switching views clears the drag flag on <html>; forget the last state so the next frame sets it again.
       sleeping3D = false; last = null; needsRender = true; wasOverview = null;
       requestAnimationFrame(frame);
+      return true;
     },
   };
 }
