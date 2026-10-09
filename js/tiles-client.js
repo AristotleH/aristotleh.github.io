@@ -38,6 +38,8 @@ function tileInput(terrain) {
 }
 
 let job = null;
+// A fresh build, for when the GPU lost the globe's buffers (their arrays are freed once uploaded).
+export function rebuildTiles() { job = null; return startTiles(); }
 export function startTiles() {
   if (job) return job;
   let toGlobe, toDetail, failGlobe, failDetail, onPage = false;
@@ -55,10 +57,19 @@ export function startTiles() {
   job.detail.catch(() => {});   // the globe reports it once it listens; until then it isn't an unhandled rejection
   try {
     const w = new Worker(new URL("./tiles-worker.js", import.meta.url), { type: "module" });
-    w.onmessage = ({ data }) => data.type === "globe" ? toGlobe(data.G) : toDetail(data.DT);
+    // The worker is let go once it has sent everything, so it doesn't hold its memory for the life of the page.
+    let detailComing = true;
+    w.onmessage = ({ data }) => {
+      if (data.type === "globe") { toGlobe(data.G); if (!detailComing) w.terminate(); }
+      else { toDetail(data.DT); w.terminate(); }
+    };
     w.onerror = e => { e.preventDefault?.(); here(); };
     w.postMessage({ type: "grid", hex: SITE.globe.grid.shape === "hex", n: SITE.globe.grid.hexSubdivisions });
-    terrainInput().then(t => w.postMessage({ type: "build", input: tileInput(t) }));
+    terrainInput().then(t => {
+      const input = tileInput(t);
+      detailComing = input.detailStops.length > 0;
+      w.postMessage({ type: "build", input });
+    });
   } catch (e) { here(); }
   return job;
 }

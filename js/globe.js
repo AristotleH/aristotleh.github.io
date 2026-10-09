@@ -5,7 +5,7 @@ import { MODE } from "./mode.js";
 import { active, goTo, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
 import { makeTerrain } from "./terrain.js";
-import { startTiles, terrainInput } from "./tiles-client.js";
+import { rebuildTiles, startTiles, terrainInput } from "./tiles-client.js";
 
 // three.js is fetched early when the page starts in 3D (index.html) but only run when the globe asks for it.
 const loadThree = () => window.THREE ? Promise.resolve() : new Promise(done => {
@@ -18,8 +18,9 @@ const loadThree = () => window.THREE ? Promise.resolve() : new Promise(done => {
 });
 
 // onReady is called once WebGL is known to work, before three.js runs or the tiles are built, so the page can show
-// the cards meanwhile. Resolves false without WebGL, else with { resume } to wake the globe after another view.
-export async function globe(onReady) {
+// the cards meanwhile; onFail if the globe can't be drawn after that (its tiles fail to rebuild after a lost context).
+// Resolves false without WebGL, else with { resume } to wake the globe after another view.
+export async function globe(onReady, onFail) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
   const canvas = document.getElementById("globe");
@@ -137,6 +138,7 @@ export async function globe(onReady) {
   const chunks = tiles.blocks.map(b => ({ mesh: null, M: null, geo: b.geo, idx: b.idx, center: new THREE.Vector3(...b.center),
     radius: b.radius, land: b.land, peak: b.peak, bayAt: b.bayAt }));
   function realize(ch) {
+    if (!ch.geo) return;   // rebuilding after a lost GPU context; the block's new arrays aren't back yet
     ch.M = geometryFrom(ch.geo, ch.bayAt.length > 0);
     ch.geo = null;
     // Bounds for three.js frustum culling: the block's cap of the sphere, plus room for the tallest tiles.
@@ -144,6 +146,10 @@ export async function globe(onReady) {
     ch.mesh = new THREE.Mesh(ch.M.geo, tileMat);
     ch.mesh.frustumCulled = true;
     scene.add(ch.mesh);
+    if (detailFocus && ch.bayAt.length) {   // tiles that detail replaces keep the shared clock (setDetailFocus)
+      for (const n of ch.bayAt) delayTile(ch.M, n, tileDelay[ch.idx[n]]);
+      ch.M.infoAttr.needsUpdate = true;
+    }
     if (palette) paintChunk(ch);
     needsRender = true;
   }
@@ -178,6 +184,49 @@ export async function globe(onReady) {
       DT.M.infoAttr.needsUpdate = true;
     }
   }
+  // The GPU can drop the page's WebGL context (on phones, under memory pressure, as after many reloads). three.js
+  // restores what it can, but the tiles' arrays were freed once uploaded, so they're built again and their buffers
+  // made afresh as blocks come into view. Pins, the core and the atmosphere keep their arrays and come back by
+  // themselves. Until then the globe isn't drawn.
+  let contextLost = false, broken = false, detailBeforeLoss = null, contextEpoch = 0;   // the epoch counts losses and restores
+  canvas.addEventListener("webglcontextlost", e => {
+    e.preventDefault(); contextLost = true; contextEpoch++;
+    // Close-ups use the globe's own tiles until the detail mesh is rebuilt, or for good if that fails: a detail
+    // state without its mesh would hide the tiles it replaces and leave a hole.
+    if (DT) { detailBeforeLoss = DT; DT = null; }
+  });
+  canvas.addEventListener("webglcontextrestored", async () => {
+    const epoch = ++contextEpoch;   // a loss or another restore after this one abandons it
+    // The old buffers went with the lost context, and three.js starts its caches afresh, so the meshes are only dropped.
+    for (const ch of chunks) if (ch.mesh) { scene.remove(ch.mesh); ch.mesh = ch.M = null; }
+    const lostDetail = detailBeforeLoss;
+    if (lostDetail) scene.remove(lostDetail.mesh);
+    const job = rebuildTiles();
+    try {
+      const fresh = await job.globe;
+      if (epoch !== contextEpoch) return;
+      // Only blocks still waiting for arrays: one realized meanwhile (by the idle build) already has a mesh, and
+      // arrays left on it would never be uploaded or freed.
+      fresh.blocks.forEach((b, i) => { if (!chunks[i].mesh) chunks[i].geo = b.geo; });
+    } catch (error) {
+      // No tiles to draw: show the HTML document, as for a build that fails at startup.
+      if (epoch === contextEpoch) { broken = true; onFail?.(error); }
+      return;
+    }
+    applyTheme();   // the clear colour was reset with the context
+    contextLost = false; needsRender = true; lastSig = NaN;
+    if (lostDetail) job.detail.then(d => {
+      if (epoch !== contextEpoch) return;
+      const M = geometryFrom(d.geo, true);
+      M.geo.boundingSphere = lostDetail.M.geo.boundingSphere;
+      lostDetail.M = M; lostDetail.mesh.geometry = M.geo;
+      DT = lostDetail; detailBeforeLoss = null;
+      paintDetail();
+      if (detailFocus) setDetailFocus(detailFocus);
+      scene.add(lostDetail.mesh);
+      needsRender = true;
+    }).catch(error => console.warn("Close-up detail failed to rebuild; close-ups use the globe's tiles.", error));
+  });
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.999, 64, 48), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   core.renderOrder = 1000;
   scene.add(core);
@@ -462,6 +511,7 @@ export async function globe(onReady) {
   let sleeping3D = false;
   function frame(now) {
     if (MODE !== "3d") { sleeping3D = true; drewLastTick = false; return; }
+    if (contextLost) { drewLastTick = false; requestAnimationFrame(frame); return; }
     if (resizeOnWake) { resizeOnWake = false; resize(); }
     const drewBefore = drewLastTick;
     drewLastTick = false;
@@ -670,7 +720,7 @@ export async function globe(onReady) {
         // Blocks on the far side are built in idle moments too, so turning the globe never waits on one.
         const idle = window.requestIdleCallback || (fn => setTimeout(() => fn({ timeRemaining: () => 6 }), 50));
         const blocks = d => {
-          for (const ch of chunks) if (!ch.mesh) { realize(ch); ch.mesh.visible = false; if (d.timeRemaining() < 2) return idle(blocks); }
+          for (const ch of chunks) if (!ch.mesh && ch.geo) { realize(ch); ch.mesh.visible = false; if (d.timeRemaining() < 2) return idle(blocks); }
         };
         setTimeout(() => idle(blocks), 300);
       }
@@ -681,13 +731,15 @@ export async function globe(onReady) {
   requestAnimationFrame(frame);
   return {
     resume() {
+      if (broken) return false;   // it can't draw any more; the caller shows the HTML document
       // The window may have changed while another view was up. Resize on the next frame, when the canvas is showing
       // again (the switch shows it after waking the globe).
       resizeOnWake = true;
-      if (!sleeping3D) return;
+      if (!sleeping3D) return true;
       // Switching views clears the drag flag on <html>; forget the last state so the next frame sets it again.
       sleeping3D = false; last = null; needsRender = true; wasOverview = null;
       requestAnimationFrame(frame);
+      return true;
     },
   };
 }

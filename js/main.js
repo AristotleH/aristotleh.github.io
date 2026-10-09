@@ -19,11 +19,14 @@ let globe3D = null, ascii = null;
 // is shown instead.
 function startGlobe() {
   let shown = false;
+  const failed = error => {
+    console.warn("The 3D globe failed to build; showing the HTML document.", error);
+    if (MODE === "3d") setMode("html");
+  };
   return new Promise((ready, fail) => {
-    globe(() => { shown = true; ready(true); }).then(g => { globe3D = g || null; if (!g) ready(false); }, error => {
+    globe(() => { shown = true; ready(true); }, failed).then(g => { globe3D = g || null; if (!g) ready(false); }, error => {
       if (!shown) return fail(error);
-      console.warn("The 3D globe failed to build; showing the HTML document.", error);
-      if (MODE === "3d") setMode("html");
+      failed(error);
     });
   });
 }
@@ -44,7 +47,8 @@ async function setMode(m, explicit = false) {
         if (!ready) { await setMode("html", false); return; }
         globeStarted = true;
       }
-      globe3D?.resume();
+      // A globe that broke after it started (its tiles failed to rebuild) can't be shown again.
+      if (globe3D && !globe3D.resume()) { await setMode("html", false); return; }
     } else {
       ascii ||= asciiGlobe();
       renderBoxes();
