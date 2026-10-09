@@ -3,13 +3,16 @@
 // made once. Each point's tile is its cell of the sphere: the centres of the small triangles around it, in order
 // (six, or five at the icosahedron's corners). Neighbouring cells share their corners exactly. cornerNbr gives, for
 // each corner, the tile across the edge from that corner to the next.
+// The icosahedron: corners V, and faces F counter-clockwise seen from outside. The 3D globe's ocean shader works out
+// hexagons from the same faces (globe.js), so they must stay the same here.
+const t = (1 + Math.sqrt(5)) / 2;
+export const ICOSA_V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+  [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
+export const ICOSA_F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+  [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+
 export function hexGrid(n) {
-  const t = (1 + Math.sqrt(5)) / 2;
-  const V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
-    [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
-  // Faces counter-clockwise seen from outside; every small triangle below keeps that winding.
-  const F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-    [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  const V = ICOSA_V, F = ICOSA_F;   // every small triangle below keeps the faces' winding
   const count = 10 * n * n + 2, T = 20 * n * n;
   const pts = new Float64Array(count * 3), tris = new Int32Array(T * 3);
   let np = 0, nt = 0;
