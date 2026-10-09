@@ -256,7 +256,9 @@ export async function globe(onReady, onFail) {
     paintDetail();
     scene.add(mesh);
     // Compile its shader now, in the gap after arrival, rather than on the first frame of a flight into the region.
-    mesh.visible = true; renderer.compile(scene, camera); mesh.visible = false;
+    // Not while the context is lost: three.js throws reading the compile log, and the detail would be dropped.
+    // It compiles on its first draw instead.
+    if (!lost()) { mesh.visible = true; renderer.compile(scene, camera); mesh.visible = false; }
     needsRender = true;
   }).catch(error => console.warn("Close-up detail failed to build; close-ups use the globe's tiles.", error));
   // A globe tile and the pieces that replace it share one clock, so the swap never leaves a hole.
@@ -278,6 +280,9 @@ export async function globe(onReady, onFail) {
   // made afresh as blocks come into view. Pins, the core and the atmosphere keep their arrays and come back by
   // themselves. Until then the globe isn't drawn.
   let contextLost = false, broken = false, detailBeforeLoss = null, contextEpoch = 0;   // the epoch counts losses and restores
+  // Lost, or not yet ready again: the context goes the moment it's lost, but the event saying so comes a task later,
+  // and a frame in between that drew (or compiled a shader) made three.js throw reading a null compile log.
+  const lost = () => contextLost || gl.isContextLost();
   canvas.addEventListener("webglcontextlost", e => {
     e.preventDefault(); contextLost = true; contextEpoch++;
     // Close-ups use the globe's own tiles until the detail mesh is rebuilt, or for good if that fails: a detail
@@ -511,7 +516,7 @@ export async function globe(onReady, onFail) {
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
     needsRender = true;
-    if (started) renderer.render(scene, camera);   // resizing clears the canvas; never show it blank
+    if (started && !lost()) renderer.render(scene, camera);   // resizing clears the canvas; never show it blank
   }
   let started = false, resizeOnWake = false;
   addEventListener("resize", resize);
@@ -605,7 +610,7 @@ export async function globe(onReady, onFail) {
   let sleeping3D = false;
   function frame(now) {
     if (MODE !== "3d") { sleeping3D = true; drewLastTick = false; return; }
-    if (contextLost) { drewLastTick = false; requestAnimationFrame(frame); return; }
+    if (lost()) { drewLastTick = false; requestAnimationFrame(frame); return; }
     if (resizeOnWake) { resizeOnWake = false; resize(); }
     const drewBefore = drewLastTick;
     drewLastTick = false;

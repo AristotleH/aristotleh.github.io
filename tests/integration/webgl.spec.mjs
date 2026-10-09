@@ -37,6 +37,30 @@ test("after a lost context the globe draws again", async ({ page }) => {
   await expect.poll(async () => Buffer.compare(before, await page.locator("#globe").screenshot())).not.toBe(0);
 });
 
+test("close-up detail that arrives while the context is lost is kept for close-ups", async ({ page }) => {
+  const warnings = [];
+  page.on("console", m => { if (m.type() === "warning") warnings.push(m.text()); });
+  // Hold the detail back 3 s, so it arrives while the context is gone.
+  await page.route("**/js/tiles-client.js", async route => {
+    const res = await route.fetch(), src = await res.text();
+    const patched = src.replace("toDetail(data.DT);", "setTimeout(() => toDetail(data.DT), 3000);");
+    expect(patched).not.toBe(src);
+    await route.fulfill({ response: res, body: patched });
+  });
+  await open(page);
+  await globeDrawn(page);
+  await page.evaluate(async () => {
+    const c = document.getElementById("globe"), gl = c.getContext("webgl2") || c.getContext("webgl");
+    const ext = gl.getExtension("WEBGL_lose_context");
+    ext.loseContext();
+    await new Promise(r => setTimeout(r, 4000));
+    ext.restoreContext();
+  });
+  await expect(page.locator("html")).toHaveAttribute("data-mode", "3d");
+  await globeDrawn(page);
+  expect(warnings.filter(w => w.includes("detail failed"))).toEqual([]);
+});
+
 test("if the tiles can't be rebuilt, the HTML document shows instead of a blank globe", async ({ page }) => {
   await breakRebuild(page, `return { globe: Promise.reject(new Error("test: no tiles")), detail: new Promise(() => {}) };`);
   await open(page);
