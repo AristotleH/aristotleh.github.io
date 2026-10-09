@@ -22,6 +22,11 @@ export function terrainInput() {
     };
   });
 }
+// Whether the globe draws its ocean as one surface instead of a tile each: with hexagons and no gap, every ocean
+// tile is the same height and only its colour shows, so the ocean's fragment shader works out the hexagons
+// (globe.js) and the tile build leaves ocean tiles out (tiles.js).
+export const OCEAN_SURFACE = SITE.globe.grid.shape === "hex" && !(SITE.globe.grid.tileGap > 0);
+
 function tileInput(terrain) {
   const G = SITE.globe;
   // Stops inside a detail region, and one centre per region for its hex detail grids.
@@ -34,7 +39,7 @@ function tileInput(terrain) {
     anchors.push([c[0] / l, c[1] / l, c[2] / l]);
   }
   return { ...G.grid, gap: G.grid.tileGap, sizeToDistance: G.detail.sizeToDistance, ice: G.terrain.iceLatitude,
-    detailStops, anchors, terrain };
+    detailStops, anchors, terrain, oceanSurface: OCEAN_SURFACE };
 }
 
 let job = null;

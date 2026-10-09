@@ -78,15 +78,17 @@ test.describe("on a phone", () => {
     const T = (type, pts) => c.send("Input.dispatchTouchEvent", { type, touchPoints: pts });
     const card = await page.locator("#intro .abox").boundingBox();
     // Pinch, sliding the lower finger onto the name card while both are down, so the globe redraws (and replaces the
-    // text under the fingers) during the pinch; the finger spread shrinks a little, so the globe zooms out and its
-    // outline stays on screen. Then lift the finger on the card, and the one on the globe.
-    const to = [card.x + 40, card.y + 30];
-    await T("touchStart", [{ x: 200, y: 150, id: 1 }, { x: 200, y: 330, id: 2 }]);
+    // text under the fingers) during the pinch. The upper finger follows to end 144 px above it, a little closer than
+    // the 180 px they started apart, so the globe zooms out and its outline stays on screen. Then lift the finger on
+    // the card, and the one on the globe.
+    const to = [card.x + 40, card.y + 30], from1 = [200, 150], to1 = [to[0], to[1] - 144];
+    await T("touchStart", [{ x: from1[0], y: from1[1], id: 1 }, { x: 200, y: 330, id: 2 }]);
     for (let i = 1; i <= 10; i++) {
-      await T("touchMove", [{ x: 200 - i * 10, y: 150 + i * 18, id: 1 }, { x: 200 + (to[0] - 200) * i / 10, y: 330 + (to[1] - 330) * i / 10, id: 2 }]);
+      await T("touchMove", [{ x: from1[0] + (to1[0] - from1[0]) * i / 10, y: from1[1] + (to1[1] - from1[1]) * i / 10, id: 1 },
+        { x: 200 + (to[0] - 200) * i / 10, y: 330 + (to[1] - 330) * i / 10, id: 2 }]);
       await page.waitForTimeout(40);
     }
-    await T("touchEnd", [{ x: 100, y: 330, id: 1 }]);
+    await T("touchEnd", [{ x: to1[0], y: to1[1], id: 1 }]);
     await T("touchEnd", []);
     const before = await settledRows(page), outline = (await asciiGrid(page)).outline;
     await touchDrag(page, [150, 300], [210, 300], 6);

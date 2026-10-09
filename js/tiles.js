@@ -107,8 +107,10 @@ export function buildGlobe(input, grid = null) {
     return !land[nb] || tileBay[k] || tileBay[nb] || tileElev[k] > tileElev[nb];
   } : null;
   const T = { dir: tileDir, cornerStart, corner, elev: tileElev, land, bay: tileBay, delay: new Float32Array(COUNT), wallAt };
+  // With an ocean surface (tiles-client.js), ocean tiles get no geometry: the globe draws the ocean as one sphere.
   const blocks = [];
-  for (const list of lists) {
+  for (const all of lists) {
+    const list = S.oceanSurface ? all.filter(g => tileKind[g] > 0) : all;
     if (!list.length) continue;
     const idx = Int32Array.from(list), c = [0, 0, 0];
     for (const g of idx) { c[0] += tileDir[g * 3]; c[1] += tileDir[g * 3 + 1]; c[2] += tileDir[g * 3 + 2]; }

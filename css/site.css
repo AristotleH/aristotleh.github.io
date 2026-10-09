@@ -154,6 +154,17 @@ h2{font-size:1.4rem;line-height:1.2}
 .a-o{color:var(--a-ocean);opacity:.7} .a-rim{color:var(--a-ocean);font-weight:500} .a-l{color:var(--a-land);font-weight:500} .a-h{color:var(--a-high);font-weight:500} .a-i{color:var(--a-ice);font-weight:500}
 .a-o.a-sh{opacity:.42} .a-l.a-sh,.a-h.a-sh,.a-i.a-sh{opacity:.6}
 .a-atm{color:var(--a-ocean);opacity:.45} .a-star{color:var(--muted);opacity:.45} .a-rt{color:var(--accent)}
+/* The same faded colours, mixed with the page behind (the text globe has nothing else under it) instead of drawn
+   translucent: a translucent span is painted as its own layer, and the globe has hundreds of them. */
+@supports (color:color-mix(in srgb,red,blue)){
+  .a-o{color:color-mix(in srgb,var(--a-ocean) 70%,var(--bg));opacity:1}
+  .a-o.a-sh{color:color-mix(in srgb,var(--a-ocean) 42%,var(--bg));opacity:1}
+  .a-l.a-sh{color:color-mix(in srgb,var(--a-land) 60%,var(--bg));opacity:1}
+  .a-h.a-sh{color:color-mix(in srgb,var(--a-high) 60%,var(--bg));opacity:1}
+  .a-i.a-sh{color:color-mix(in srgb,var(--a-ice) 60%,var(--bg));opacity:1}
+  .a-atm{color:color-mix(in srgb,var(--a-ocean) 45%,var(--bg));opacity:1}
+  .a-star{color:color-mix(in srgb,var(--muted) 45%,var(--bg));opacity:1}
+}
 .a-mk{color:var(--accent);font-weight:500} .a-lb{color:var(--ink)} .a-lbo{background:var(--ink);color:var(--bg);font-weight:500}
 [data-mode="ascii"] #globe,[data-mode="ascii"] #labels,[data-mode="ascii"] .card{display:none}
 [data-mode="ascii"] #ascii-globe{display:block}
@@ -171,8 +182,9 @@ h2{font-size:1.4rem;line-height:1.2}
 }
 @media (max-width:699px){
   .stop{align-items:flex-end;min-height:108vh;padding-block:0 calc(env(safe-area-inset-bottom,0px) + 76px)}
-  /* Sized to the visible screen (svh), not the space behind the browser's toolbars, so the card starts higher. */
-  .stop.intro{min-height:84vh;min-height:84svh;justify-content:flex-end}
+  /* Ends where the card stands 16 px above the stop bar (--intro-h, set by placeIntro in page.js); until then, and
+     without it, a little short of the visible screen (svh), so the card isn't under the browser's toolbars. */
+  .stop.intro{min-height:84vh;min-height:84svh;min-height:var(--intro-h,84svh);justify-content:flex-end}
   .card{width:100%}
   .stop.intro .card{width:auto;align-self:stretch}   /* in the overview's column, 100% plus padding would overflow */
   .hud{bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:calc(env(safe-area-inset-left,0px) + 16px);right:calc(env(safe-area-inset-right,0px) + 16px);transform:none;max-width:none}

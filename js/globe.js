@@ -5,7 +5,8 @@ import { MODE } from "./mode.js";
 import { active, goTo, syncScrollZone, viewStop } from "./page.js";
 import { zoomGestures } from "./gestures.js";
 import { makeTerrain } from "./terrain.js";
-import { rebuildTiles, startTiles, terrainInput } from "./tiles-client.js";
+import { OCEAN_SURFACE, rebuildTiles, startTiles, terrainInput } from "./tiles-client.js";
+import { ICOSA_F, ICOSA_V } from "./hexgrid.js";
 
 // three.js is fetched early when the page starts in 3D (index.html) but only run when the globe asks for it.
 const loadThree = () => window.THREE ? Promise.resolve() : new Promise(done => {
@@ -24,8 +25,12 @@ export async function globe(onReady, onFail) {
   const G = SITE.globe, T = G.terrain;
   let lastSig = NaN, needsRender = true, lastCamKey = NaN, animating = true, wasOverview = null;   // render-on-demand state
   const canvas = document.getElementById("globe");
-  // The context is made here, with the settings three.js would use, and handed to it once it runs.
-  const attrs = { alpha: false, antialias: true, depth: true, stencil: true, premultipliedAlpha: true,
+  // The context is made here, with the settings three.js would use, and handed to it once it runs. Multisampled on
+  // every screen: without it the tiles' edges stair-step and crawl as the globe turns, visibly so on a DPR 3 phone
+  // (the canvas is drawn at 2x there). Phone GPUs keep the samples in on-chip tile memory, so it costs them little;
+  // it's software renderers such as SwiftShader that it slows down.
+  const antialias = true;
+  const attrs = { alpha: false, antialias, depth: true, stencil: true, premultipliedAlpha: true,
     preserveDrawingBuffer: false, powerPreference: "high-performance" };
   let gl = null;
   try { gl = canvas.getContext("webgl2", attrs) || canvas.getContext("webgl", attrs); } catch (e) {}
@@ -36,7 +41,7 @@ export async function globe(onReady, onFail) {
   const TR = makeTerrain(await terrainInput());
   await loadThree();
   if (!window.THREE) throw new Error("three.js didn't load");
-  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true, alpha: false, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 
   const scene = new THREE.Scene();
@@ -91,17 +96,101 @@ export async function globe(onReady, onFail) {
           ? "float mm = 1.0; float lift = wave * wave * (3.0 - 2.0 * wave); float base = mix(0.99, 1.0, lift);"
           : "float mm = uM; float lift = 1.0 - replaced * step(0.35, wave); float base = mix(0.99, 1.0, lift);"}
         float km = mix(uOcean.x, uOcean.y, mm) + land * max(0.0, mix(uBase.x, uBase.y, mm) + aInfo.x * mix(uExag.x, uExag.y, mm));
-        transformed *= base + aInfo.w * km / ${EARTH_KM.toFixed(1)} * lift;`);
+        // Walls reach down to 0.999, below the ocean surface even where its flat triangles dip under the sphere.
+        transformed *= base - (1.0 - aInfo.w) * 0.001 * lift + aInfo.w * km / ${EARTH_KM.toFixed(1)} * lift;`);
     };
     mat.customProgramCacheKey = () => isDetail ? "cells-detail" : "cells-globe";
     return mat;
   }
   const tileMat = heightMaterial(false);
+
+  // The ocean, with hexagons and no gap (OCEAN_SURFACE): every ocean tile is the same height and only its colour
+  // shows, so instead of a tile each (most of the globe's triangles, each a few pixels across on the overview) the
+  // ocean is one sphere, and its fragment shader works out which hexagon a pixel is in. The hex grid is an
+  // icosahedron's faces split into a triangular lattice and pushed out onto the sphere (hexgrid.js), so a point's
+  // place in its face's lattice comes from its barycentric weights on the face's corners; its tile is the nearest
+  // lattice point, and the tile's colour a hash of that point. The colours are random like the tiles' tones, though
+  // not the same ones.
+  // Where close-up detail shows, the surface sinks 0.3 km, under the detail's own ocean tiles (0.5 km up in close-ups),
+  // so they cover it, and the globe tiles they replace drop away beneath it. (Cutting the replaced hexagons out of the
+  // surface instead meant a shader that discards pixels, which stops the GPU rejecting hidden pixels early: it cost a
+  // quarter of the frame rate in close-ups.)
+  const oceanUniforms = { uN: { value: G.grid.hexSubdivisions }, uSea: { value: new THREE.Color() }, uSea2: { value: new THREE.Color() } };
+  function oceanMaterial() {
+    const mat = new THREE.MeshLambertMaterial();
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, heightUniforms, oceanUniforms);
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
+        attribute vec3 aM, aA, aB, aC;   // the face's inverse corner matrix times the position, and its corners
+        varying vec3 vM, vA, vB, vC;
+        uniform float uM, uP;
+        uniform vec2 uOcean;`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>
+        vM = aM; vA = aA; vB = aB; vC = aC;
+        transformed *= 1.0 + (mix(uOcean.x, uOcean.y, uM) - 0.3 * min(1.0, uP * 4.0)) / ${EARTH_KM.toFixed(1)};`);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+        varying vec3 vM, vA, vB, vC;
+        uniform float uN;
+        uniform vec3 uSea, uSea2;`)
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        // Lattice weights on the face's corners (summing to n), and the nearest lattice point: within a small
+        // triangle of the lattice, the corner with the largest barycentric weight.
+        vec3 w = vM * (uN / (vM.x + vM.y + vM.z));
+        float iu = floor(w.y), iv = floor(w.z), fu = w.y - iu, fv = w.z - iv;
+        vec2 q;
+        if (fu + fv < 1.0) {
+          float f0 = 1.0 - fu - fv;
+          q = f0 >= fu && f0 >= fv ? vec2(iu, iv) : fu >= fv ? vec2(iu + 1.0, iv) : vec2(iu, iv + 1.0);
+        } else {
+          float f0 = fu + fv - 1.0, f1 = 1.0 - fu, f2 = 1.0 - fv;
+          q = f0 >= f1 && f0 >= f2 ? vec2(iu + 1.0, iv + 1.0) : f1 >= f2 ? vec2(iu, iv + 1.0) : vec2(iu + 1.0, iv);
+        }
+        // The tile's centre on the sphere: the same on both faces for a tile on a shared edge, so its colour is too.
+        vec3 P = normalize((uN - q.x - q.y) * vA + q.x * vB + q.y * vC);
+        vec3 p3 = fract(floor(P * 2048.0 + 0.5) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        diffuseColor.rgb = mix(uSea, uSea2, fract((p3.x + p3.y) * p3.z));`);
+    };
+    mat.customProgramCacheKey = () => "ocean";
+    return mat;
+  }
+  let ocean = null, oceanMat = null;
+  if (OCEAN_SURFACE) {
+    oceanMat = oceanMaterial();
+    // Each face split 16 times: the flat triangles dip at most 0.0006 radii (4 km) inside the sphere, which land
+    // walls reach below (heightMaterial), and 5120 triangles in all.
+    const S = 16, pos = [], aM = [], aA = [], aB = [], aC = [], index = [];
+    const inv = new THREE.Matrix3(), v = new THREE.Vector3(), m = new THREE.Vector3();
+    for (const [a, b, c] of ICOSA_F) {
+      const A = ICOSA_V[a], B = ICOSA_V[b], C = ICOSA_V[c], base = pos.length / 3;
+      inv.set(A[0], B[0], C[0], A[1], B[1], C[1], A[2], B[2], C[2]).invert();
+      const at = (i, j) => base + i * (S + 1) - i * (i - 1) / 2 + j;
+      for (let i = 0; i <= S; i++) for (let j = 0; j <= S - i; j++) {
+        const wa = S - i - j;
+        v.set(A[0] * wa + B[0] * i + C[0] * j, A[1] * wa + B[1] * i + C[1] * j, A[2] * wa + B[2] * i + C[2] * j).normalize();
+        m.copy(v).applyMatrix3(inv);
+        pos.push(v.x, v.y, v.z); aM.push(m.x, m.y, m.z); aA.push(...A); aB.push(...B); aC.push(...C);
+      }
+      for (let i = 0; i < S; i++) for (let j = 0; j < S - i; j++) {
+        index.push(at(i, j), at(i + 1, j), at(i, j + 1));
+        if (i + j < S - 1) index.push(at(i + 1, j), at(i + 1, j + 1), at(i, j + 1));
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("normal", new THREE.Float32BufferAttribute(pos, 3));
+    for (const [name, arr] of [["aM", aM], ["aA", aA], ["aB", aB], ["aC", aC]]) geo.setAttribute(name, new THREE.Float32BufferAttribute(arr, 3));
+    geo.setIndex(index);
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1.01);
+    ocean = new THREE.Mesh(geo, oceanMat);
+    ocean.renderOrder = 900;   // after the land blocks, so the pixels under land are rejected before shading
+  }
   // Shader programs compile while the worker builds the tiles, so the first frame doesn't wait on them: the tiles',
   // and the plain lit and unlit ones the pins and the core use.
   {
     const geo = new THREE.BufferGeometry();
-    const warm = [tileMat, new THREE.MeshLambertMaterial(), new THREE.MeshBasicMaterial()].map(m => new THREE.Mesh(geo, m));
+    const warm = [tileMat, new THREE.MeshLambertMaterial(), new THREE.MeshBasicMaterial(), ...(ocean ? [oceanMat] : [])]
+      .map(m => new THREE.Mesh(m === oceanMat ? ocean.geometry : geo, m));
     scene.add(...warm); renderer.compile(scene, camera); scene.remove(...warm);
   }
   // The globe's tiles, from the worker: what each tile is, and each block's geometry as plain arrays.
@@ -167,7 +256,9 @@ export async function globe(onReady, onFail) {
     paintDetail();
     scene.add(mesh);
     // Compile its shader now, in the gap after arrival, rather than on the first frame of a flight into the region.
-    mesh.visible = true; renderer.compile(scene, camera); mesh.visible = false;
+    // Not while the context is lost: three.js throws reading the compile log, and the detail would be dropped.
+    // It compiles on its first draw instead.
+    if (!lost()) { mesh.visible = true; renderer.compile(scene, camera); mesh.visible = false; }
     needsRender = true;
   }).catch(error => console.warn("Close-up detail failed to build; close-ups use the globe's tiles.", error));
   // A globe tile and the pieces that replace it share one clock, so the swap never leaves a hole.
@@ -189,6 +280,9 @@ export async function globe(onReady, onFail) {
   // made afresh as blocks come into view. Pins, the core and the atmosphere keep their arrays and come back by
   // themselves. Until then the globe isn't drawn.
   let contextLost = false, broken = false, detailBeforeLoss = null, contextEpoch = 0;   // the epoch counts losses and restores
+  // Lost, or not yet ready again: the context goes the moment it's lost, but the event saying so comes a task later,
+  // and a frame in between that drew (or compiled a shader) made three.js throw reading a null compile log.
+  const lost = () => contextLost || gl.isContextLost();
   canvas.addEventListener("webglcontextlost", e => {
     e.preventDefault(); contextLost = true; contextEpoch++;
     // Close-ups use the globe's own tiles until the detail mesh is rebuilt, or for good if that fails: a detail
@@ -227,8 +321,12 @@ export async function globe(onReady, onFail) {
       needsRender = true;
     }).catch(error => console.warn("Close-up detail failed to rebuild; close-ups use the globe's tiles.", error));
   });
+  if (ocean) scene.add(ocean);
+  // The core hides tiles that have dropped away, and anything seen through the gaps between tiles. An ocean surface
+  // does both, so then there's none.
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.999, 64, 48), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   core.renderOrder = 1000;
+  core.visible = !ocean;
   scene.add(core);
   // Atmosphere: a faint halo just outside the globe's edge. It fades out in close-ups, where the camera sits inside it.
   const atmo = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 40), new THREE.ShaderMaterial({
@@ -384,6 +482,7 @@ export async function globe(onReady, onFail) {
       return out;
     };
     palette = { ocean, ocean2, land2, snow, landColor };
+    oceanUniforms.uSea.value.copy(ocean); oceanUniforms.uSea2.value.copy(ocean2);
     for (const ch of chunks) if (ch.M) paintChunk(ch);
     paintDetail();
     renderer.setClearColor(new THREE.Color(css("--bg")), 1);   // the canvas is opaque; match the page
@@ -417,7 +516,7 @@ export async function globe(onReady, onFail) {
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
     needsRender = true;
-    if (started) renderer.render(scene, camera);   // resizing clears the canvas; never show it blank
+    if (started && !lost()) renderer.render(scene, camera);   // resizing clears the canvas; never show it blank
   }
   let started = false, resizeOnWake = false;
   addEventListener("resize", resize);
@@ -511,7 +610,7 @@ export async function globe(onReady, onFail) {
   let sleeping3D = false;
   function frame(now) {
     if (MODE !== "3d") { sleeping3D = true; drewLastTick = false; return; }
-    if (contextLost) { drewLastTick = false; requestAnimationFrame(frame); return; }
+    if (lost()) { drewLastTick = false; requestAnimationFrame(frame); return; }
     if (resizeOnWake) { resizeOnWake = false; resize(); }
     const drewBefore = drewLastTick;
     drewLastTick = false;

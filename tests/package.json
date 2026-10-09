@@ -1,12 +1,14 @@
 {
   "name": "aristotleh-site-tests",
   "private": true,
-  "description": "Unit and integration tests for the site. The site itself has no dependencies or build step; these are for testing only.",
+  "description": "Unit, integration and performance tests for the site. The site itself has no dependencies or build step; these are for testing only.",
   "type": "module",
   "scripts": {
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "node --test \"unit/*.test.mjs\"",
-    "test:integration": "playwright test"
+    "test:integration": "playwright test",
+    "test:perf": "playwright test -c playwright.perf.config.mjs",
+    "perf:summary": "node perf/summary.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
