@@ -1,6 +1,6 @@
 // Overview zoom for both globes: the wheel (or a trackpad pinch) over the globe, or a two-finger pinch.
 // z.log is added to the camera's log altitude; the page still scrolls from the name card, which sits above the globe,
-// and the wheel still scrolls anywhere below the card's bottom edge.
+// and the wheel still scrolls anywhere below the card's top edge.
 import { SITE } from "./site.js";
 
 // `floor()` is the lowest z.log the view allows right now (it changes as the globe turns); zooming in stops there
@@ -17,7 +17,7 @@ export function zoomGestures(el, isActive, card, floor = () => -Infinity) {
   el.addEventListener("wheel", e => {
     if (!isActive()) return;
     const box = card()?.getBoundingClientRect();
-    if (box && box.height && e.clientY > box.bottom) return;
+    if (box && box.height && e.clientY > box.top) return;
     e.preventDefault();
     const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1);
     z.log = clampLog(z.log + px * (e.ctrlKey ? 0.01 : 0.0015));

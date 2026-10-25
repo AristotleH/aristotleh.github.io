@@ -61,13 +61,13 @@ export let centers = [];
 export function measure() {
   centers = sections.map(el => { const r = el.getBoundingClientRect(); return r.top + scrollY + r.height / 2; });
 }
-// Sized from the name card's bottom edge to the bottom of the screen while a globe can be dragged.
+// Sized from the name card's top edge to the bottom of the screen while a globe can be dragged.
 export function syncScrollZone() {
   const zone = document.getElementById("scroll-zone");
   const drag = MODE === "3d" ? document.documentElement.classList.contains("can-drag")
     : MODE === "ascii" && document.getElementById("ascii-globe").classList.contains("can-drag");
   const card = drag && document.querySelector(MODE === "3d" ? "#intro .card" : "#intro .abox");
-  const top = card ? Math.max(0, card.getBoundingClientRect().bottom) : innerHeight;
+  const top = card ? Math.max(0, card.getBoundingClientRect().top) : innerHeight;
   zone.style.display = top < innerHeight ? "block" : "none";
   zone.style.top = top + "px";
 }

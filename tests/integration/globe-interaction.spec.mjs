@@ -143,15 +143,16 @@ test.describe("on a desktop", () => {
   test.use({ ...DESKTOP, contextOptions: { reducedMotion: "reduce" } });
 
   for (const mode of ["3d", "ascii"]) {
-    test(`${mode}: the wheel zooms the globe, and scrolls the page over the name card and below it`, async ({ page }) => {
+    test(`${mode}: the wheel zooms the globe above the name card's top edge, and scrolls the page below it`, async ({ page }) => {
       await open(page, mode);
       if (mode === "3d") await globeDrawn(page);
-      await page.mouse.move(900, 400);
+      const card = await page.locator(mode === "3d" ? "#intro .card" : "#intro .abox").boundingBox();
+      await page.mouse.move(900, card.y - 10);
       for (let i = 0; i < 5; i++) await page.mouse.wheel(0, -120);
       await page.waitForTimeout(500);
       expect(await scrollY(page)).toBe(0);
-      const card = await page.locator(mode === "3d" ? "#intro .card" : "#intro .abox").boundingBox();
-      await page.mouse.move(card.x + 50, card.y + 50);
+      // Beside the card, level with its middle: over the globe, but below the card's top edge.
+      await page.mouse.move(900, card.y + card.height / 2);
       await page.mouse.wheel(0, 300);
       await expect.poll(() => scrollY(page)).toBeGreaterThan(0);
     });
