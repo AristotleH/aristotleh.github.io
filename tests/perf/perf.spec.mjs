@@ -41,7 +41,8 @@ async function touchSwipe(c, page, ms, [x, y] = [196, 260], amp = 120) {
   }
   await T("touchEnd", []);
 }
-async function mouseSwipe(page, ms, [x, y] = [900, 400], amp = 200) {
+// Desktop gestures start above the name card's top edge (about 290 px down at 1280x800), where the globe takes them.
+async function mouseSwipe(page, ms, [x, y] = [900, 200], amp = 200) {
   await page.mouse.move(x, y);
   await page.mouse.down();
   const t0 = Date.now();
@@ -52,7 +53,7 @@ async function mouseSwipe(page, ms, [x, y] = [900, 400], amp = 200) {
   }
   await page.mouse.up();
 }
-async function wheelZoom(page, ms, [x, y] = [900, 400]) {
+async function wheelZoom(page, ms, [x, y] = [900, 200]) {
   await page.mouse.move(x, y);
   const t0 = Date.now();
   while (Date.now() - t0 < ms) {

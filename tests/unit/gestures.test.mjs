@@ -19,20 +19,23 @@ function fakeElement() {
     fire(type, props = {}) { const e = { preventDefault() { this.prevented = true; }, ...props }; for (const fn of on[type] || []) fn(e); return e; },
   };
 }
-const setup = (floor = () => -Infinity, cardBottom = 100) => {
+// The name card spans 100 to 150 px down the screen.
+const setup = (floor = () => -Infinity) => {
   const el = fakeElement();
-  const z = zoomGestures(el, () => true, () => ({ getBoundingClientRect: () => ({ bottom: cardBottom, height: 50 }) }), floor);
+  const z = zoomGestures(el, () => true, () => ({ getBoundingClientRect: () => ({ top: 100, bottom: 150, height: 50 }) }), floor);
   return { el, z };
 };
 const touch = (el, type, id, x, y) => el.fire(type, { pointerId: id, pointerType: "touch", clientX: x, clientY: y });
 
-test("the wheel over the globe zooms (and keeps the page still) but not below the name card", () => {
+test("the wheel over the globe zooms (and keeps the page still) but not below the name card's top edge", () => {
   const { el, z } = setup();
   const e = el.fire("wheel", { deltaY: -100, deltaMode: 0, clientY: 50 });
   assert.ok(e.prevented);
   assert.ok(z.log < 0);
-  const below = el.fire("wheel", { deltaY: -100, deltaMode: 0, clientY: 150 });
-  assert.ok(!below.prevented, "below the card the wheel scrolls the page");
+  for (const clientY of [125, 200]) {
+    const below = el.fire("wheel", { deltaY: -100, deltaMode: 0, clientY });
+    assert.ok(!below.prevented, `${clientY} px down, below the card's top edge, the wheel scrolls the page`);
+  }
 });
 
 test("zoom stops at the configured limits", () => {
