@@ -115,12 +115,11 @@ test.describe("the overview on a phone", () => {
 test.describe("the overview on wider screens", () => {
   for (const viewport of [DESKTOP.viewport, { width: 1000, height: 700 }, { width: 994, height: 1132 }]) {
     for (const mode of ["3d", "ascii"]) {
-      test(`${mode} at ${viewport.width}x${viewport.height}: the hint and name card sit midway down to the stop bar`, async ({ page }) => {
+      test(`${mode} at ${viewport.width}x${viewport.height}: the name card's bottom edge is a quarter of the way up`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await open(page, mode);
-        const intro = await box(page, "#intro"), hint = await box(page, ".drag-hint"), hud = await box(page, ".hud");
-        const card = await box(page, mode === "3d" ? "#intro .card" : "#intro .abox");
-        expect(Math.abs((hint.top - intro.top) - (hud.top - card.bottom))).toBeLessThanOrEqual(2);
+        const hud = await box(page, ".hud"), card = await box(page, mode === "3d" ? "#intro .card" : "#intro .abox");
+        expect(Math.abs(card.bottom - Math.min(viewport.height * 0.75, hud.top - 16))).toBeLessThanOrEqual(1);
       });
     }
   }
