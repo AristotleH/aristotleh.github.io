@@ -32,7 +32,7 @@ test("after a lost context the globe draws again", async ({ page }) => {
   await globeDrawn(page);
   // and it still turns and zooms: the wheel changes the picture
   const before = await page.locator("#globe").screenshot();
-  await page.mouse.move(900, 400);
+  await page.mouse.move(900, 200);   // above the name card, where the wheel zooms
   for (let i = 0; i < 4; i++) await page.mouse.wheel(0, -120);
   await expect.poll(async () => Buffer.compare(before, await page.locator("#globe").screenshot())).not.toBe(0);
 });

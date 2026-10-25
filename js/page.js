@@ -61,13 +61,13 @@ export let centers = [];
 export function measure() {
   centers = sections.map(el => { const r = el.getBoundingClientRect(); return r.top + scrollY + r.height / 2; });
 }
-// Sized from the name card's bottom edge to the bottom of the screen while a globe can be dragged.
+// Sized from the name card's top edge to the bottom of the screen while a globe can be dragged.
 export function syncScrollZone() {
   const zone = document.getElementById("scroll-zone");
   const drag = MODE === "3d" ? document.documentElement.classList.contains("can-drag")
     : MODE === "ascii" && document.getElementById("ascii-globe").classList.contains("can-drag");
   const card = drag && document.querySelector(MODE === "3d" ? "#intro .card" : "#intro .abox");
-  const top = card ? Math.max(0, card.getBoundingClientRect().bottom) : innerHeight;
+  const top = card ? Math.max(0, card.getBoundingClientRect().top) : innerHeight;
   zone.style.display = top < innerHeight ? "block" : "none";
   zone.style.top = top + "px";
 }
@@ -114,21 +114,23 @@ export function sizeHud() {
   hudEl.style.width = innerWidth < 700 ? "" : `${Math.ceil(widest) + 2}px`;
 }
 
-// On phones the overview's card stands 16 px above the stop bar. Viewport units can't put it there in every browser:
-// the stop bar is fixed to the bottom of the layout viewport, which in iOS 26 Safari ends about 100 px above the
-// bottom of 100svh (its toolbar floats over the page), so an 84svh overview left a 63 px gap there. So the overview's
-// height (--intro-h) comes from where the stop bar is, measured at the top of the page or when the width changes.
-// Not while scrolled: the stop bar moves as the browser's toolbars collapse, and the page would shift under the finger.
+// On phones the overview's card stands 16 px above the stop bar; wider, its bottom edge is a quarter of the way up the
+// screen, or 16 px above the stop bar if that's higher. Viewport units can't put it there in every browser: the stop bar is fixed to the
+// bottom of the layout viewport, which in iOS 26 Safari ends about 100 px above the bottom of 100svh (its toolbar
+// floats over the page), so an 84svh overview left a 63 px gap there. So the overview's height (--intro-h) comes from
+// where the stop bar is, measured at the top of the page or when the width changes. Not while scrolled: the stop bar
+// moves as the browser's toolbars collapse, and the page would shift under the finger.
 let introWidth = 0;
 export function placeIntro() {
   const intro = document.getElementById("intro"), hud = document.querySelector(".hud");
-  if (innerWidth >= 700 || MODE === "html" || !hud.offsetHeight) { intro.style.removeProperty("--intro-h"); introWidth = 0; return; }
+  if (MODE === "html" || !hud.offsetHeight) { intro.style.removeProperty("--intro-h"); introWidth = 0; return; }
   if (scrollY > 1 && innerWidth === introWidth) return;
   introWidth = innerWidth;
   // min-height sets the content box, whose bottom is the card's: the section's padding comes below it.
   const top = intro.getBoundingClientRect().top + scrollY + (parseFloat(getComputedStyle(intro).paddingTop) || 0);
   const hudTop = hud.getBoundingClientRect().top + scrollY;
-  intro.style.setProperty("--intro-h", `${Math.round(hudTop - 16 - top)}px`);
+  const bottom = innerWidth < 700 ? hudTop - 16 : Math.min(hudTop - 16, scrollY + innerHeight * 0.75);
+  intro.style.setProperty("--intro-h", `${Math.round(bottom - top)}px`);
 }
 
 // Fills in the profile, the intro card and one section per step, and starts tracking the scroll.

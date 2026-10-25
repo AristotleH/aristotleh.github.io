@@ -1,6 +1,7 @@
-// Layout on phones: the notch and home indicator (safe areas), the 3D globe's proportions after the window changed
-// under another view, and the ASCII name card's box lining up.
-import { test, expect, open, globeDrawn, PHONE, PHONE_LANDSCAPE } from "./fixtures.mjs";
+// Layout: on phones, the notch and home indicator (safe areas), the 3D globe's proportions after the window changed
+// under another view, the ASCII name card's box lining up, and where
+// the overview's card stands on wider screens.
+import { test, expect, open, globeDrawn, PHONE, PHONE_LANDSCAPE, DESKTOP } from "./fixtures.mjs";
 
 // Emulates a notched phone's safe areas, before the page loads.
 async function notch(page, insets) {
@@ -109,6 +110,19 @@ test.describe("the overview on a phone", () => {
     await page.waitForTimeout(200);
     expect(await page.locator("#intro").evaluate(e => e.getBoundingClientRect().height)).toBe(before);
   });
+});
+
+test.describe("the overview on wider screens", () => {
+  for (const viewport of [DESKTOP.viewport, { width: 1000, height: 700 }, { width: 994, height: 1132 }]) {
+    for (const mode of ["3d", "ascii"]) {
+      test(`${mode} at ${viewport.width}x${viewport.height}: the name card's bottom edge is a quarter of the way up`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await open(page, mode);
+        const hud = await box(page, ".hud"), card = await box(page, mode === "3d" ? "#intro .card" : "#intro .abox");
+        expect(Math.abs(card.bottom - Math.min(viewport.height * 0.75, hud.top - 16))).toBeLessThanOrEqual(1);
+      });
+    }
+  }
 });
 
 test.describe("the ASCII name card", () => {

@@ -51,7 +51,7 @@ A failure before `onReady` makes the view fall back; a failure after it (the bui
 
 - Each touch pointer is captured to the globe element (`setPointerCapture`), and `lostpointercapture` counts as a lift. The ASCII globe replaces the text under the fingers every frame; without capture, a finger lifted over the name card was never counted, the pinch never ended, and one-finger drags zoomed instead of panning.
 - A pinch that hits a zoom limit re-anchors, so pinching back responds at once.
-- On the overview, drags on the globe pan it; only the name card (and the area below it, `#scroll-zone`) scrolls the page. Elsewhere the page scrolls normally.
+- On the overview, drags on the globe pan it; only the name card (and everything below its top edge, `#scroll-zone`) scrolls the page. Elsewhere the page scrolls normally.
 
 ## Pin grouping
 

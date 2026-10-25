@@ -59,12 +59,14 @@ main{position:relative;z-index:2;padding-inline:16px;pointer-events:none}
 #globe,#ascii-globe,#scroll-zone,.hud,.modebar{-webkit-touch-callout:none}
 .stop{min-height:100vh;display:flex;align-items:center;padding-block:10vh}
 .stop.side-right{justify-content:flex-end}
-.stop.intro{min-height:92vh}
 
 .card{width:min(390px,100%);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:22px;display:flex;flex-direction:column;gap:10px}
 @media (min-width:1100px){.stop .card,.drag-hint{margin-inline:clamp(0px,4vw,80px)}}
 /* The overview stacks a hint above the name card. Drags on the hint go through to the globe. */
-.stop.intro{flex-direction:column;justify-content:center;align-items:flex-start}
+.stop.intro{flex-direction:column;justify-content:flex-end;align-items:flex-start}
+/* Off phones, the card's bottom edge is a quarter of the way up the screen, or 16 px above the stop bar if that's
+   higher (--intro-h, set by placeIntro in page.js). */
+@media (min-width:700px){.stop.intro{min-height:var(--intro-h,65vh);padding-block:min(64px,10vh)}}
 .drag-hint{margin-top:0;margin-bottom:8px;padding:5px 10px;background:var(--bg);color:var(--muted);border:1px solid var(--line);border-radius:8px;font-size:.85rem;line-height:1.3}
 [data-mode="ascii"] .drag-hint{border-color:var(--ink);border-radius:0;color:var(--ink);font:400 12.5px/1.45 var(--mono);margin-inline:0}
 
@@ -184,7 +186,7 @@ h2{font-size:1.4rem;line-height:1.2}
   .stop{align-items:flex-end;min-height:108vh;padding-block:0 calc(env(safe-area-inset-bottom,0px) + 76px)}
   /* Ends where the card stands 16 px above the stop bar (--intro-h, set by placeIntro in page.js); until then, and
      without it, a little short of the visible screen (svh), so the card isn't under the browser's toolbars. */
-  .stop.intro{min-height:84vh;min-height:84svh;min-height:var(--intro-h,84svh);justify-content:flex-end}
+  .stop.intro{min-height:84vh;min-height:84svh;min-height:var(--intro-h,84svh)}
   .card{width:100%}
   .stop.intro .card{width:auto;align-self:stretch}   /* in the overview's column, 100% plus padding would overflow */
   .hud{bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:calc(env(safe-area-inset-left,0px) + 16px);right:calc(env(safe-area-inset-right,0px) + 16px);transform:none;max-width:none}
