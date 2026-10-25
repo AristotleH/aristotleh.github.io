@@ -114,21 +114,23 @@ export function sizeHud() {
   hudEl.style.width = innerWidth < 700 ? "" : `${Math.ceil(widest) + 2}px`;
 }
 
-// On phones the overview's card stands 16 px above the stop bar. Viewport units can't put it there in every browser:
-// the stop bar is fixed to the bottom of the layout viewport, which in iOS 26 Safari ends about 100 px above the
-// bottom of 100svh (its toolbar floats over the page), so an 84svh overview left a 63 px gap there. So the overview's
-// height (--intro-h) comes from where the stop bar is, measured at the top of the page or when the width changes.
-// Not while scrolled: the stop bar moves as the browser's toolbars collapse, and the page would shift under the finger.
+// On phones the overview's card stands 16 px above the stop bar; wider, the overview ends at the stop bar, with the
+// hint and card centred in it. Viewport units can't put it there in every browser: the stop bar is fixed to the
+// bottom of the layout viewport, which in iOS 26 Safari ends about 100 px above the bottom of 100svh (its toolbar
+// floats over the page), so an 84svh overview left a 63 px gap there. So the overview's height (--intro-h) comes from
+// where the stop bar is, measured at the top of the page or when the width changes. Not while scrolled: the stop bar
+// moves as the browser's toolbars collapse, and the page would shift under the finger.
 let introWidth = 0;
 export function placeIntro() {
   const intro = document.getElementById("intro"), hud = document.querySelector(".hud");
-  if (innerWidth >= 700 || MODE === "html" || !hud.offsetHeight) { intro.style.removeProperty("--intro-h"); introWidth = 0; return; }
+  if (MODE === "html" || !hud.offsetHeight) { intro.style.removeProperty("--intro-h"); introWidth = 0; return; }
   if (scrollY > 1 && innerWidth === introWidth) return;
   introWidth = innerWidth;
-  // min-height sets the content box, whose bottom is the card's: the section's padding comes below it.
-  const top = intro.getBoundingClientRect().top + scrollY + (parseFloat(getComputedStyle(intro).paddingTop) || 0);
+  // min-height sets the content box. On phones its bottom is the card's, and the section's padding comes below it.
+  const style = getComputedStyle(intro), gap = innerWidth < 700 ? 16 : parseFloat(style.paddingBottom) || 0;
+  const top = intro.getBoundingClientRect().top + scrollY + (parseFloat(style.paddingTop) || 0);
   const hudTop = hud.getBoundingClientRect().top + scrollY;
-  intro.style.setProperty("--intro-h", `${Math.round(hudTop - 16 - top)}px`);
+  intro.style.setProperty("--intro-h", `${Math.round(hudTop - gap - top)}px`);
 }
 
 // Fills in the profile, the intro card and one section per step, and starts tracking the scroll.
