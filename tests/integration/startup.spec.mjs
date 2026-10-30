@@ -5,12 +5,12 @@ import { test, expect, open, globeDrawn, PHONE, DESKTOP, THREE_URL, siteData } f
 test.describe("on a phone", () => {
   test.use(PHONE);
 
-  test("starts in 3D with the name card, the hint and a drawn globe", async ({ page }) => {
+  test("starts in 3D with the name card, no hint above it, and a drawn globe", async ({ page }) => {
     await open(page);
     await expect(page.locator("html")).toHaveAttribute("data-mode", "3d");
     const site = await siteData();
     await expect(page.locator("#intro .card h1")).toHaveText(site.profile.name);
-    await expect(page.locator(".drag-hint")).toHaveText("Try dragging and zooming the globe!");
+    await expect(page.getByText("Try dragging and zooming the globe!")).toHaveCount(0);
     await expect(page.locator("#plain")).toBeHidden();
     await globeDrawn(page);
   });
